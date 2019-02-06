@@ -1,9 +1,23 @@
+{-# LANGUAGE EmptyDataDecls, GADTs, StandaloneDeriving #-}
+
 module EDT where
-  import Data.List (groupBy, sortOn, maximumBy)
+  import Data.List (groupBy, sortBy, sortOn, maximumBy, uncons, nub)
+  import Data.Maybe (catMaybes)
   import Data.Ord (comparing)
   import Data.Function (on)
 
-  data Graph = Graph [Labeled Node]
+  data Stochastic
+  data Deterministic
+
+  data Node a where
+     Always :: String -> Node a
+     Distribution :: [Probability String] -> Node Stochastic
+     Conditional :: [Clause] -> Node a
+
+  deriving instance Eq (Node a) 
+  deriving instance Show (Node a)
+
+  data Graph a = Graph [Labeled (Node a)]
     deriving (Eq, Show)
   unGraph (Graph g) = g
 
@@ -29,10 +43,7 @@ module EDT where
   data Clause = Clause [Guard] String
     deriving (Eq, Show)
 
-  data Node = Always String
-            | Distribution [Probability String]
-            | Conditional [Clause]
-    deriving (Eq, Show)
+  clauseValue (Clause _ v) = v
 
   newcomb = Graph [Labeled "action"         action
                   ,Labeled "accuracy"       accuracy
@@ -42,8 +53,8 @@ module EDT where
                   ,Labeled "outcome"        outcome
                   ,Labeled "value"          value
                   ]
-    where action         = Distribution [Probability "onebox" undefined
-                                        ,Probability "twobox" undefined
+    where action         = Distribution [Probability "onebox" 0.5
+                                        ,Probability "twobox" 0.5
                                         ]
           accuracy       = Distribution [Probability "accurate"   0.99
                                         ,Probability "inaccurate" 0.01
@@ -70,44 +81,49 @@ module EDT where
                                        ,Clause [Guard "outcome" "2e"]    "1000"
                                        ]
 
-  findG :: String -> Graph -> [Probability String]
-  findG l g@(Graph xs) = squash $ find' xs
-    where find' []     = []
-          find' (x:xs) = found x ++ (find' xs)
-          found (Labeled s n) | l == s    = case n of
-                                              Always a        -> [Probability a 1.0]
-                                              Distribution ds -> ds
-                                              Conditional  ds -> concatMap computeDependentProbabilities ds
-                              | otherwise = []
-          computeDependentProbabilities (Clause gs v) = probabilityForGuards g 1.0 v gs
-          squash = map sumProbabilities . groupBy ((==) `on` (fst.unProbability)) . sortOn (fst.unProbability)
-          sumProbabilities ps@((Probability v _):_) = Probability v (sum $ map (snd.unProbability) ps)
-
-  probabilityForGuards :: Graph -> Float -> String -> [Guard] -> [Probability String]
-  probabilityForGuards _ 0 _ _          = []
-  probabilityForGuards _ p v []         = [Probability v p]
-  probabilityForGuards g p v ((Guard n e):gs) = probabilityForGuards (intervene n e g) (p * (sum $ map (probabilityForGuard e) $ findG n g)) v gs
-  probabilityForGuard e (Probability v p) | v == e    = p
-                                          | otherwise = 0.0
-
-  mapG :: (Labeled  Node -> Node) -> Graph -> Graph
-  mapG f (Graph [])     = Graph []
-  mapG f (Graph (n:ns)) = Graph ((Labeled (label n) (f n)) : (unGraph $ mapG f (Graph ns)))
-
-  intervene :: String -> String -> Graph -> Graph
-  intervene l c g = mapG (\(Labeled s n) -> if (s == l) then (Always c) else n) g
-
-  choices :: String -> Graph -> [String]
-  choices l = map (fst.unProbability) . findG l
-
-  bestChoice :: (String -> Float) -> String -> String -> Graph -> (String, Float)
-  bestChoice uf a v g = maximumBy (comparing snd) $ map (\(c,g) -> (c, ev $ findG v g)) gs
-    where gs = map (\c -> (c, intervene a c g)) $ choices a g
-          ev = sum . map (\(Probability v p) -> uf v * p)
-
-  edtChoiceForNewcomb = bestChoice read "action" "value" newcomb
+  edtChoiceForNewcomb = edt (Search read "action" "value") newcomb
 
   expectedEdtChoiceForNewcomb = ("onebox", 990000.0) == edtChoiceForNewcomb
+
+
+
+  data Search = Search (String -> Float) String String
+  edt :: Search -> Graph Stochastic -> (String, Float)
+  edt (Search uf a o) = consolidate . catMaybes . map expectedValue . branches
+    where expectedValue (Probability g v) = do a' <- find a g
+                                               o' <- find o g
+                                               return $ Probability (a', uf o') v
+          consolidate = maximumBy (comparing snd) . weighted
+
+  find :: String -> Graph Deterministic -> Maybe String
+  find l g@(Graph lns) = resolve =<< getByLabel lns
+    where getByLabel :: [Labeled (Node a)] -> Maybe (Node a)
+          getByLabel [] = Nothing
+          getByLabel ((Labeled l' n):lns) | l' == l = Just n
+                                          | otherwise = getByLabel lns
+          resolve :: Node Deterministic -> Maybe String
+          resolve (Always v) = Just v
+          resolve (Conditional cs) = fmap (clauseValue.fst) $ uncons $ filter clauseMatches cs
+          clauseMatches :: Clause -> Bool
+          clauseMatches (Clause gs _) = all guardMatches gs
+          guardMatches (Guard l' v) = find l' g == Just v
+
+  probabilities :: String -> Graph Stochastic -> [Probability String]
+  probabilities l = catMaybes . map find' . branches
+    where find' (Probability g p) = fmap (`Probability` p) (find l g)
+
+  --TODO implement squash to consolidate duplicates
+
+  choices :: String -> Graph Stochastic -> [String]
+  choices l = nub . map (fst.unProbability) . probabilities l
+
+  weighted :: [Probability (String, Float)] -> [(String, Float)]
+  weighted = map weight . groupBy ((==) `on` name) . sortOn name
+    where name            = fst.fst.unProbability
+          score           = snd.fst.unProbability
+          probability     = snd.unProbability
+          weightedScore p = probability p * score p
+          weight ps       = (name $ head ps, (sum $ map weightedScore ps) / (sum $ map probability ps))
 
   weird = Graph [Labeled "a" a
                 ,Labeled "b" b
@@ -124,7 +140,7 @@ module EDT where
                           ,Clause [Guard "a" "a2", Guard "b" "b1"] "c3"
                           ,Clause [Guard "a" "a2", Guard "b" "b2"] "c4"
                           ]
-  expectedFindGForWeird = [Probability "c1" 0.5, Probability "c4" 0.5] == findG "c" weird
+  expectedProbabilitiesForWeird = [Probability "c1" 0.5, Probability "c4" 0.5] == probabilities "c" weird
 
   weirder = [Probability (Graph [Labeled "a" $ Always "a1"
                                 ,Labeled "b" $ Conditional [Clause [Guard "a" "a1"] "b1"]
@@ -140,14 +156,14 @@ module EDT where
                          0.5
             ]
 
-  branches :: Graph -> [Probability Graph]
-  branches (Graph ls) = loop ls
+  branches :: Graph Stochastic -> [Probability (Graph Deterministic)]
+  branches (Graph ls) = filter ((>0) . snd . unProbability) $ loop ls
     where loop [] = [Probability (Graph []) 1.0]
-          loop (l@(Labeled _ (Always _)):ls) = map (prepend l) $ loop ls
+          loop ((Labeled l (Always a)):ls) = map (prepend (Labeled l (Always a))) $ loop ls
           loop ((Labeled l (Distribution ps)):ls) = do (Probability s p1) <- ps
                                                        (Probability (Graph ls') p2) <- loop ls
                                                        return (Probability (Graph ((Labeled l $ Always s):ls')) (p1 * p2))
-          loop (l@(Labeled _ (Conditional _)):ls) = map (prepend l) $ loop ls
+          loop ((Labeled l (Conditional c)):ls) = map (prepend (Labeled l (Conditional c))) $ loop ls
           prepend l (Probability (Graph ls) p) = Probability (Graph (l:ls)) p
 
   expectedWeirdBranches = expected == actual
@@ -175,15 +191,3 @@ module EDT where
                      ,Probability (Graph [Labeled "a" (Always "a2"),Labeled "b" (Always "b1")]) 0.27
                      ,Probability (Graph [Labeled "a" (Always "a2"),Labeled "b" (Always "b2")]) 0.63
                      ]
-
-{--
-  decondition :: Graph -> Graph
-  decondition g@(Graph ls) = loop ls
-    where loop [] = Graph []
-          loop (l@(Labeled _ (Always _)):ls) = Graph (l:loop ls)
-          loop ((Labeled s (Conditional cs)):ls) = case decondition' g cs of
-                                                     Nothing -> Graph (loop ls)
-                                                     Just l -> Graph (l:loop ls)
-          decondition' _ [] = Nothing
-          decondition' g ((Clause guards o):cs) = do Guard l e <- guards
---}
