@@ -1,12 +1,13 @@
 {-# LANGUAGE EmptyDataDecls, GADTs, StandaloneDeriving #-}
 
 module EDT where
-  import Data.List (groupBy, sortBy, sortOn, maximumBy, uncons)
-  import Data.Maybe (catMaybes)
+  import Data.List (groupBy, sortBy, sortOn, maximumBy, uncons, null)
+  import Data.Maybe (catMaybes,fromJust)
   import Data.Ord (comparing)
   import Data.Function (on)
   import qualified Data.Map.Strict as Map
   import Data.Ratio (Rational)
+  import Data.Foldable (toList)
 
   type Endo a = a -> a
 
@@ -93,21 +94,31 @@ module EDT where
 
   testEdtChoiceForNewcomb = test "EdtChoiceForNewcomb" ("onebox", 990000.0) $ edtChoiceForNewcomb
 
-  testNewcombChoices = test "NewcombChoices" ["onebox", "twobox"] $ choices "action" newcomb
+  testNewcombChoices = test "NewcombChoices" ["onebox", "twobox"] $ choices "action" $ branches newcomb
 
   data Search = Search (String -> Utility) String String
 
-  edt :: Foldable t => t Guard -> Search -> Graph Stochastic -> (String, Utility)
-  edt = dt condition
-
   dt :: Foldable t => (Guard -> Endo [Probability (Graph Deterministic)]) -> t Guard -> Search -> Graph Stochastic -> (String, Utility)
-  dt hypothesis gs (Search uf a o) g = maximumBy (comparing snd) $ map (\(v, ps) -> (v, sum $ map expectedValue ps)) hypotheticals
+  dt hypothesis gs (Search uf a o) g = maximumBy (comparing snd) $ map expectation $ hypotheticals
     where hypotheticals :: [(String, [Probability (Graph Deterministic)])]
-          hypotheticals = map conclusion $ choices a g
+          hypotheticals = catMaybes $ map (hypothetical.conclusion) $ choices a $ branches g
+          hypothetical (v, []) = Nothing
+          hypothetical c       = Just c
           conclusion v = (v, hypothesis (Guard a v) possibleBranches)
           possibleBranches = foldl (flip condition) (branches g) gs
-          expectedValue (Probability g v) = maybe 0.0 ((* (fromRational v)) . uf) $ find o g
+          expectedValue (Probability g v) = ((* (fromRational v)) . uf) $ fromJust $ find o g
+          expectation (v, ps) = (v, sum $ map expectedValue ps)
 
+  stableDT :: Foldable t => (Guard -> Endo [Probability (Graph Deterministic)]) -> t Guard -> Search -> Graph Stochastic -> (String, Utility)
+  stableDT hypothesis gs s@(Search _ a _) g | fst decision == fst dominance = decision
+                                            | otherwise                     = error ("OMG! " ++ (show dominance) ++ " /= " ++ (show decision))
+    where decision :: (String, Utility)
+          decision = dt hypothesis ((Guard a (fst dominance)): toList gs) s g
+          dominance :: (String, Utility)
+          dominance = dt hypothesis gs s g
+
+  edt :: Foldable t => t Guard -> Search -> Graph Stochastic -> (String, Utility)
+  edt = stableDT condition
 
   find :: String -> Graph Deterministic -> Maybe String
   find l g@(Graph lns) = resolve =<< getByLabel lns
@@ -122,8 +133,8 @@ module EDT where
           clauseMatches (Clause gs _) = all guardMatches gs
           guardMatches (Guard l' v) = find l' g == Just v
 
-  probabilities :: String -> Graph Stochastic -> [Probability String]
-  probabilities l = squash (when (==)) . catMaybes . map find' . branches
+  probabilities :: String -> [Probability (Graph Deterministic)] -> [Probability String]
+  probabilities l = squash (when (==)) . catMaybes . map find'
     where find' (Probability g p) = fmap (`Probability` p) (find l g)
 
 
@@ -141,7 +152,7 @@ module EDT where
     where squash' (p1:p2:ps) = maybe (p1:squash' (p2:ps)) (\a3 -> squash' ((Probability a3 (probabilityValue p1 + probabilityValue p2)):ps)) (probabilityElement p1 >+< probabilityElement p2)
           squash' ps         = ps
 
-  choices :: String -> Graph Stochastic -> [String]
+  choices :: String -> [Probability (Graph Deterministic)] -> [String]
   choices l = map probabilityElement . probabilities l
 
   weighted :: [Probability (String, Utility)] -> [(String, Utility)]
@@ -170,7 +181,8 @@ module EDT where
                           ,Clause [Guard "a" "a2", Guard "b" "b1"] "c3"
                           ,Clause [Guard "a" "a2", Guard "b" "b2"] "c4"
                           ]
-  testProbabilitiesForWeird = test "ProbabilitiesForWeird" [Probability "c1" 0.5, Probability "c4" 0.5] $ probabilities "c" weird
+  testProbabilitiesForWeird =
+    test "ProbabilitiesForWeird" [Probability "c1" 0.5, Probability "c4" 0.5] $ probabilities "c" $ branches weird
 
   weirder = [Probability (Graph [Labeled "a" $ Always "a1"
                                 ,Labeled "b" $ Conditional [Clause [Guard "a" "a1"] "b1"]
@@ -262,7 +274,7 @@ module EDT where
 
   testEdtChoiceForCausalNewcomb = test "EdtChoiceForCausalNewcomb" ("onebox", 990000.0) $ edtChoiceForCausalNewcomb
 
-  testCausalNewcombChoices = test "CausalNewcombChoices" ["onebox", "twobox"] $ choices "action" newcomb
+  testCausalNewcombChoices = test "CausalNewcombChoices" ["onebox", "twobox"] $ choices "action" $ branches newcomb
 
   xorBlackmail = Graph [Labeled "infestation" infestation
                        ,Labeled "prediction"  prediction
@@ -340,12 +352,7 @@ module EDT where
   testEdtChoiceForCausalXorBlackmail = test "EdtChoiceForCausalXorBlackmail" ("pay", -1000.0) edtChoiceForCausalXorBlackmail
 
   cdt :: [Guard] -> Search -> Graph Stochastic -> (String, Utility)
-  cdt gs s@(Search _ a _) g | fst decision == fst dominance = decision
-                            | otherwise                     = error ("OMG! " ++ (show dominance) ++ " /= " ++ (show decision))
-    where decision :: (String, Utility)
-          decision = dt intervene ((Guard a (fst dominance)):gs) s g
-          dominance :: (String, Utility)
-          dominance = dt intervene gs s g
+  cdt = stableDT intervene
 
   intervene :: Guard -> Endo [Probability (Graph Deterministic)]
   intervene (Guard l v) = normalize . map (mapBranches intervention)
@@ -388,6 +395,8 @@ module EDT where
                                        ,Clause [Guard "outcome" "flee and live"]  "999"
                                        ,Clause [Guard "outcome" "flee and die" ]   "-1"
                                        ]
+
+  stdSearch = (Search read "action" "value")
 
   edtChoiceForDeathInDamascus = edt [] (Search read "action" "value") deathInDamascus
   testEdtChoiceForDeathInDamascus = test "EdtChoiceForDeathInDamascus" ("stay", 0.0) edtChoiceForDeathInDamascus
