@@ -1,6 +1,13 @@
-{-# LANGUAGE EmptyDataDecls, GADTs, StandaloneDeriving #-}
+{-# LANGUAGE EmptyDataDecls, GADTs, StandaloneDeriving, OverloadedStrings #-}
 
 module EDT where
+{--
+ TODO
+  Introduzir typeclasses nos locais apropriados
+  Introduzir tipos mais explícitos
+  Remover estruturas que não se pagam
+ --}
+
   import Data.List (groupBy, sortBy, sortOn, maximumBy, uncons, null)
   import Data.Maybe (catMaybes,fromJust)
   import Data.Ord (comparing)
@@ -8,16 +15,69 @@ module EDT where
   import qualified Data.Map.Strict as Map
   import Data.Ratio (Rational)
   import Data.Foldable (toList)
+  import GHC.Exts (IsString(fromString))
 
   type Endo a = a -> a
+
+  newtype Label = Label String
+    deriving (Eq, Ord, Show)
+
+  instance IsString Label where
+    fromString = Label
+
+  newtype State = State String
+    deriving (Eq, Ord, Show)
+
+  instance IsString State where
+    fromString = State
 
   data Stochastic
   data Deterministic
 
+  data Probability a = Probability a Rational
+    deriving (Eq, Show)
+  unProbability (Probability a r) = (a, r)
+  probabilityElement (Probability a _) = a
+  probabilityValue   (Probability _ r) = r
+
+  mkProbability :: a -> Rational -> Probability a
+  mkProbability a x | x > 0 && x < 1 = Probability a x
+                    | otherwise      = error $ "Invalid probability " ++ show x
+
+  prior :: Rational -> Probability ()
+  prior = Probability ()
+
+  instance Functor Probability where
+    fmap f (Probability e v) = Probability (f e) v
+
+  instance Applicative Probability where
+    pure a = Probability a 1
+    (Probability f x) <*> (Probability a y) = Probability (f a) (x * y)
+
+  instance Monad Probability where
+    (Probability a x) >>= k = let Probability b y = k a in Probability b (x * y)
+
+  data Distribution a = Distribution_ [Probability a]
+    deriving (Eq, Show)
+
+  mkDistribution :: [Probability a] -> Distribution a
+  mkDistribution ps = Distribution_ $ filter ((>0).probabilityValue) $ map normalize ps
+    where
+      normalize (Probability a x) = Probability a (x/t)
+      t = sum $ map probabilityValue ps
+
   data Node a where
-     Always :: String -> Node a
-     Distribution :: [Probability String] -> Node Stochastic
+     Always :: State -> Node a
+     Distribution :: [Probability State] -> Node Stochastic
      Conditional :: [Clause] -> Node a
+
+  data Guard = Guard Label State
+    deriving (Eq, Show)
+
+  data Clause = Clause [Guard] State
+    deriving (Eq, Show)
+
+  clauseValue (Clause _ v) = v
 
   deriving instance Eq (Node a) 
   deriving instance Show (Node a)
@@ -26,33 +86,17 @@ module EDT where
     deriving (Eq, Show)
   unGraph (Graph g) = g
 
-  class WithLabel l where
-    label :: l -> String 
-
-  data Labeled a = Labeled String a
+  data Labeled a = Labeled Label a
     deriving (Eq, Show)
 
-  instance WithLabel (Labeled a) where
-    label (Labeled s _) = s
-
-  data Probability a = Probability a Rational
-    deriving (Eq, Show)
-  unProbability (Probability a r) = (a, r)
-  probabilityElement (Probability a _) = a
-  probabilityValue   (Probability _ r) = r
-
-  data Guard = Guard String String
-    deriving (Eq, Show)
-
-  instance WithLabel Guard where
-    label (Guard s _) = s
-
-  data Clause = Clause [Guard] String
-    deriving (Eq, Show)
-
-  clauseValue (Clause _ v) = v
+  instance Functor Labeled where
+    fmap f (Labeled l a) = Labeled l (f a)
 
   type Utility = Float
+
+  data Search = Search (State -> Utility) Label Label
+  stdSearch = (Search uf "action" "value")
+    where uf (State s) = read s
 
   newcomb = Graph [Labeled "action"         action
                   ,Labeled "accuracy"       accuracy
@@ -90,53 +134,52 @@ module EDT where
                                        ,Clause [Guard "outcome" "2e"]    "1000"
                                        ]
 
-  edtChoiceForNewcomb = edt [] (Search read "action" "value") newcomb
+  edtChoiceForNewcomb = edt [] stdSearch newcomb
 
   testEdtChoiceForNewcomb = test "EdtChoiceForNewcomb" ("onebox", 990000.0) $ edtChoiceForNewcomb
 
   testNewcombChoices = test "NewcombChoices" ["onebox", "twobox"] $ choices "action" $ branches newcomb
 
-  data Search = Search (String -> Utility) String String
-
-  dt :: Foldable t => (Guard -> Endo [Probability (Graph Deterministic)]) -> t Guard -> Search -> Graph Stochastic -> (String, Utility)
+  dt :: Foldable t => (Guard -> Endo [Probability (Graph Deterministic)]) -> t Guard -> Search -> Graph Stochastic -> (State, Utility)
   dt hypothesis gs (Search uf a o) g = maximumBy (comparing snd) $ map expectation $ hypotheticals
-    where hypotheticals :: [(String, [Probability (Graph Deterministic)])]
+    where hypotheticals :: [(State, [Probability (Graph Deterministic)])]
           hypotheticals = catMaybes $ map (hypothetical.conclusion) $ choices a $ branches g
           hypothetical (v, []) = Nothing
           hypothetical c       = Just c
           conclusion v = (v, hypothesis (Guard a v) possibleBranches)
           possibleBranches = foldl (flip condition) (branches g) gs
+          expectedValue :: Probability (Graph Deterministic) -> Utility
           expectedValue (Probability g v) = ((* (fromRational v)) . uf) $ fromJust $ find o g
+          expectation :: (State, [Probability (Graph Deterministic)]) -> (State, Utility)
           expectation (v, ps) = (v, sum $ map expectedValue ps)
 
-  stableDT :: Foldable t => (Guard -> Endo [Probability (Graph Deterministic)]) -> t Guard -> Search -> Graph Stochastic -> (String, Utility)
+  stableDT :: Foldable t => (Guard -> Endo [Probability (Graph Deterministic)]) -> t Guard -> Search -> Graph Stochastic -> (State, Utility)
   stableDT hypothesis gs s@(Search _ a _) g | fst decision == fst dominance = decision
                                             | otherwise                     = error ("OMG! " ++ (show dominance) ++ " /= " ++ (show decision))
-    where decision :: (String, Utility)
+    where decision :: (State, Utility)
           decision = dt hypothesis ((Guard a (fst dominance)): toList gs) s g
-          dominance :: (String, Utility)
+          dominance :: (State, Utility)
           dominance = dt hypothesis gs s g
 
-  edt :: Foldable t => t Guard -> Search -> Graph Stochastic -> (String, Utility)
+  edt :: Foldable t => t Guard -> Search -> Graph Stochastic -> (State, Utility)
   edt = stableDT condition
 
-  find :: String -> Graph Deterministic -> Maybe String
+  find :: Label -> Graph Deterministic -> Maybe State
   find l g@(Graph lns) = resolve =<< getByLabel lns
     where getByLabel :: [Labeled (Node a)] -> Maybe (Node a)
           getByLabel [] = Nothing
           getByLabel ((Labeled l' n):lns) | l' == l = Just n
                                           | otherwise = getByLabel lns
-          resolve :: Node Deterministic -> Maybe String
+          resolve :: Node Deterministic -> Maybe State
           resolve (Always v) = Just v
           resolve (Conditional cs) = fmap (clauseValue.fst) $ uncons $ filter clauseMatches cs
           clauseMatches :: Clause -> Bool
           clauseMatches (Clause gs _) = all guardMatches gs
           guardMatches (Guard l' v) = find l' g == Just v
 
-  probabilities :: String -> [Probability (Graph Deterministic)] -> [Probability String]
+  probabilities :: Label -> [Probability (Graph Deterministic)] -> [Probability State]
   probabilities l = squash (when (==)) . catMaybes . map find'
-    where find' (Probability g p) = fmap (`Probability` p) (find l g)
-
+    where find' (Probability g p) = fmap (flip Probability p) (find l g)
 
   when :: (a -> a -> Bool) -> (a -> a -> Maybe a)
   when (==) a1 a2 | a1 == a2  = Just a1
@@ -144,26 +187,30 @@ module EDT where
 
   testSquash = test "Squash" [Probability "A" 0.3, Probability "B" 0.7] $ squash (when (==)) [Probability "A" 0.1, Probability "B" 0.4, Probability "A" 0.2, Probability "B" 0.3]
 
+  test :: Eq a => String -> a -> a -> Either String (String, a, a)
   test s  a b | a == b    = Left ("Ok " ++ s)
               | otherwise = Right ("Failed " ++ s, a, b)
 
   squash :: Ord a => (a -> a -> Maybe a) -> Endo [Probability a]
   squash (>+<) = squash' . sortOn unProbability
-    where squash' (p1:p2:ps) = maybe (p1:squash' (p2:ps)) (\a3 -> squash' ((Probability a3 (probabilityValue p1 + probabilityValue p2)):ps)) (probabilityElement p1 >+< probabilityElement p2)
+    where squash' (p1:p2:ps) = case merge p1 p2 of
+                                 Nothing -> p1:squash' (p2:ps)
+                                 Just p3 ->    squash' (p3:ps)
           squash' ps         = ps
+          merge (Probability a x) (Probability b y) = fmap (flip Probability (x+y)) (a >+< b)
 
-  choices :: String -> [Probability (Graph Deterministic)] -> [String]
+  choices :: Label -> [Probability (Graph Deterministic)] -> [State]
   choices l = map probabilityElement . probabilities l
 
-  weighted :: [Probability (String, Utility)] -> [(String, Utility)]
+  weighted :: [Probability (State, Utility)] -> [(State, Utility)]
   weighted = map weight . groupBy ((==) `on` name) . sortOn name
-    where name            :: Probability (String, Utility) -> String
+    where name            :: Probability (State, Utility) -> State
           name            = fst.probabilityElement
-          score           :: Probability (String, Utility) -> Utility
+          score           :: Probability (State, Utility) -> Utility
           score           = snd.probabilityElement
-          weightedScore   :: Probability (String, Utility) -> Utility
+          weightedScore   :: Probability (State, Utility) -> Utility
           weightedScore p = fromRational (probabilityValue p) * score p
-          weight          :: [Probability (String, Utility)] -> (String, Utility)
+          weight          :: [Probability (State, Utility)] -> (State, Utility)
           weight ps       = (name $ head ps, (sum $ map weightedScore ps) / (fromRational $ sum $ map probabilityValue ps))
 
   weird = Graph [Labeled "a" a
@@ -200,16 +247,19 @@ module EDT where
 
   branches :: Graph Stochastic -> [Probability (Graph Deterministic)]
   branches (Graph ls) = filter ((>0) . snd . unProbability) $ loop ls
-    where loop [] = [Probability (Graph []) 1.0]
-          loop ((Labeled l (Always a)):ls) = map (prepend (Labeled l (Always a))) $ loop ls
-          loop ((Labeled l (Distribution ps)):ls) = do (Probability s p1) <- ps
-                                                       (Probability (Graph ls') p2) <- loop ls
-                                                       return (Probability (Graph ((Labeled l $ Always s):ls')) (p1 * p2))
-          loop ((Labeled l (Conditional c)):ls) = map (prepend (Labeled l (Conditional c))) $ loop ls
-          prepend l (Probability (Graph ls) p) = Probability (Graph (l:ls)) p
+    where prepend l = fmap $ \(Graph ls) -> Graph (l:ls)
+          loop []                                 = [Probability (Graph []) 1.0]
+          loop ((Labeled l (Always a))       :ls) = map (prepend (Labeled l (Always a)))      $ loop ls
+          loop ((Labeled l (Conditional c))  :ls) = map (prepend (Labeled l (Conditional c))) $ loop ls
+          loop ((Labeled l (Distribution ps)):ls) = [branch l pa pb | pa <- ps, pb <- loop ls]
+          branch :: Label -> Probability State -> Endo (Probability (Graph b))
+          branch l pa pb = do s <- pa
+                              Graph ls' <- pb
+                              let l' = Labeled l $ Always s
+                              return $ Graph (l':ls')
 
   testWeirdBranches = test "WeirdBranches" expected actual
-    where actual = branches weird
+    where actual = branches weird 
           expected = [Probability (Graph [Labeled "a" (Always "a1")
                                          ,Labeled "b" (Conditional [Clause [Guard "a" "a1"] "b1",Clause [Guard "a" "a2"] "b2"])
                                          ,Labeled "c" (Conditional [Clause [Guard "a" "a1",Guard "b" "b1"] "c1",Clause [Guard "a" "a1",Guard "b" "b2"] "c2",Clause [Guard "a" "a2",Guard "b" "b1"] "c3",Clause [Guard "a" "a2",Guard "b" "b2"] "c4"])
@@ -270,7 +320,7 @@ module EDT where
                                        ,Clause [Guard "outcome" "1e"]       "0"
                                        ,Clause [Guard "outcome" "2e"]    "1000"
                                        ]
-  edtChoiceForCausalNewcomb = edt [] (Search read "action" "value") causalNewcomb
+  edtChoiceForCausalNewcomb = edt [] stdSearch causalNewcomb
 
   testEdtChoiceForCausalNewcomb = test "EdtChoiceForCausalNewcomb" ("onebox", 990000.0) $ edtChoiceForCausalNewcomb
 
@@ -302,7 +352,7 @@ module EDT where
                                     ,Clause [Guard "infestation" "no termites", Guard "action" "refuse"] "-0"
                                     ]
 
-  edtChoiceForXorBlackmail = edt [Guard "observation" "letter"] (Search read "action" "value") xorBlackmail
+  edtChoiceForXorBlackmail = edt [Guard "observation" "letter"] stdSearch xorBlackmail
 
   testEdtChoiceForXorBlackmail = test "EdtChoiceForXorBlackmail" ("pay", -1000.0) $ edtChoiceForXorBlackmail
 
@@ -313,7 +363,7 @@ module EDT where
   normalize :: Endo [Probability a]
   normalize ps = normalize' (sum (map probabilityValue ps)) ps
     where normalize' _ []     = []
-          normalize' t (p:ps) = Probability (probabilityElement p) (probabilityValue p / t) : normalize' t ps
+          normalize' t (p:ps) = (prior (1/t) >> p) : normalize' t ps
 
   testNormalize =  test "Normalize" [Probability "A" 0.25,Probability "B" 0.75] $ normalize [Probability "A" 0.1, Probability "B" 0.3]
 
@@ -347,11 +397,11 @@ module EDT where
                                     ,Clause [Guard "infestation" "no termites", Guard "action" "refuse"] "-0"
                                     ]
 
-  edtChoiceForCausalXorBlackmail = edt [Guard "observation" "letter"] (Search read "action" "value") causalXorBlackmail
+  edtChoiceForCausalXorBlackmail = edt [Guard "observation" "letter"] stdSearch causalXorBlackmail
 
   testEdtChoiceForCausalXorBlackmail = test "EdtChoiceForCausalXorBlackmail" ("pay", -1000.0) edtChoiceForCausalXorBlackmail
 
-  cdt :: [Guard] -> Search -> Graph Stochastic -> (String, Utility)
+  cdt :: [Guard] -> Search -> Graph Stochastic -> (State, Utility)
   cdt = stableDT intervene
 
   intervene :: Guard -> Endo [Probability (Graph Deterministic)]
@@ -361,12 +411,12 @@ module EDT where
                                          | otherwise = ln
 
   mapBranches :: Endo (Labeled (Node a)) -> Endo (Probability (Graph a))
-  mapBranches f (Probability (Graph lns) v) = Probability (Graph (map f lns)) v
+  mapBranches f = fmap (\(Graph lns) -> Graph (map f lns))
 
-  cdtChoiceForCausalNewcomb = cdt [] (Search read "action" "value") causalNewcomb
+  cdtChoiceForCausalNewcomb = cdt [] stdSearch causalNewcomb
   testCdtChoiceForCausalNewcomb = test "CdtChoiceForCausalNewcomb" ("twobox", 11000.0) cdtChoiceForCausalNewcomb
 
-  cdtChoiceForCausalXorBlackmail = cdt [Guard "observation" "letter"] (Search read "action" "value") causalXorBlackmail
+  cdtChoiceForCausalXorBlackmail = cdt [Guard "observation" "letter"] stdSearch causalXorBlackmail
   testCdtChoiceForCausalXorBlackmail = test "CausalXorBlackmail" ("refuse", -1000000.0) cdtChoiceForCausalXorBlackmail
 
 
@@ -396,13 +446,11 @@ module EDT where
                                        ,Clause [Guard "outcome" "flee and die" ]   "-1"
                                        ]
 
-  stdSearch = (Search read "action" "value")
-
-  edtChoiceForDeathInDamascus = edt [] (Search read "action" "value") deathInDamascus
+  edtChoiceForDeathInDamascus = edt [] stdSearch deathInDamascus
   testEdtChoiceForDeathInDamascus = test "EdtChoiceForDeathInDamascus" ("stay", 0.0) edtChoiceForDeathInDamascus
 
-  cdtDominanceForDeathInDamascus = [dt intervene [Guard "action" "stay"] (Search read "action" "value") deathInDamascus
-                                   ,dt intervene [Guard "action" "flee"] (Search read "action" "value") deathInDamascus
+  cdtDominanceForDeathInDamascus = [dt intervene [Guard "action" "stay"] stdSearch deathInDamascus
+                                   ,dt intervene [Guard "action" "flee"] stdSearch deathInDamascus
                                    ]
 
   testCdtDominanceForDeathInDamascus = test "CdtDominanceForDeathInDamascus" [("flee",999.0),("stay",1000.0)] cdtDominanceForDeathInDamascus
