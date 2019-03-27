@@ -8,7 +8,7 @@ module EDT where
   Remover estruturas que não se pagam
  --}
 
-  import Data.List (groupBy, sortBy, sortOn, maximumBy, uncons, null)
+  import Data.List (groupBy, sortBy, sortOn, maximumBy, uncons, null, nub, sort)
   import Data.Maybe (catMaybes,fromJust)
   import Data.Ord (comparing)
   import Data.Function (on)
@@ -97,6 +97,15 @@ module EDT where
   data Search = Search (State -> Utility) Label Label
   stdSearch = (Search uf "action" "value")
     where uf (State s) = read s
+
+  dot :: String -> Graph a -> String
+  dot s (Graph lns) = "digraph " ++ s ++ " {\r\n" ++ nodes ++ "}\r\n"
+    where nodes = foldr (++) "" $ map prettyPrint lns
+          prettyPrint (Labeled (Label l) n) = describe l n ++ "\r\n"
+          describe l (Conditional cs) = foldr (++) "" $ map (\k -> k ++ " -> " ++ l ++ ";\r\n") $ clauses cs
+          describe l _                = l
+          clauses = nub . sort . concatMap (\(Clause gs _) -> guards gs)
+          guards  = nub . sort . map (\(Guard (Label n) _) -> n)
 
   newcomb = Graph [Labeled "action"         action
                   ,Labeled "accuracy"       accuracy
@@ -187,9 +196,9 @@ module EDT where
 
   testSquash = test "Squash" [Probability "A" 0.3, Probability "B" 0.7] $ squash (when (==)) [Probability "A" 0.1, Probability "B" 0.4, Probability "A" 0.2, Probability "B" 0.3]
 
-  test :: Eq a => String -> a -> a -> Either String (String, a, a)
+  test :: (Eq a, Show a) => String -> a -> a -> Either String (String, String, String)
   test s  a b | a == b    = Left ("Ok " ++ s)
-              | otherwise = Right ("Failed " ++ s, a, b)
+              | otherwise = Right ("Failed " ++ s, show a, show b)
 
   squash :: Ord a => (a -> a -> Maybe a) -> Endo [Probability a]
   squash (>+<) = squash' . sortOn unProbability
@@ -283,7 +292,6 @@ module EDT where
                      ,Probability (Graph [Labeled "a" (Always "a2"),Labeled "b" (Always "b1")]) 0.27
                      ,Probability (Graph [Labeled "a" (Always "a2"),Labeled "b" (Always "b2")]) 0.63
                      ]
-
 
   causalNewcomb = Graph [Labeled "action"         action
                         ,Labeled "accuracy"       accuracy
@@ -455,7 +463,66 @@ module EDT where
 
   testCdtDominanceForDeathInDamascus = test "CdtDominanceForDeathInDamascus" [("flee",999.0),("stay",1000.0)] cdtDominanceForDeathInDamascus
 
-  tests = (testEdtChoiceForNewcomb
+  parfitsHitchhiker = Graph [Labeled "predisposition" predisposition
+                            ,Labeled "accuracy"       accuracy
+                            ,Labeled "offer"          offer
+                            ,Labeled "location"       location
+                            ,Labeled "action"         action
+                            ,Labeled "value"          value
+                            ]
+    where predisposition = Distribution [Probability "trustworthy" 0.5
+                                        ,Probability "untrustworthy" 0.5
+                                        ]
+          accuracy       = Distribution [Probability "accurate"   0.99
+                                        ,Probability "inaccurate" 0.01
+                                        ]
+          offer          = Conditional [Clause [Guard "predisposition" "trustworthy",   Guard "accuracy" "accurate"]   "ride"
+                                       ,Clause [Guard "predisposition" "trustworthy",   Guard "accuracy" "inaccurate"] "no ride"
+                                       ,Clause [Guard "predisposition" "untrustworthy", Guard "accuracy" "accurate"]   "no ride"
+                                       ,Clause [Guard "predisposition" "untrustworthy", Guard "accuracy" "inaccurate"] "ride"
+                                       ]
+          location       = Conditional [Clause [Guard "offer" "ride"]    "city"
+                                       ,Clause [Guard "offer" "no ride"] "desert"
+                                       ]
+          action         = Conditional [Clause [Guard "predisposition" "trustworthy", Guard "location" "city"] "pay"
+                                       ,Clause [] "no pay"
+                                       ]
+          value          = Conditional [Clause [Guard "action" "pay",    Guard "location" "city"] "-1000"
+                                       ,Clause [Guard "action" "no pay", Guard "location" "city"] "0"
+                                       ,Clause []                                                 "-1000000"
+                                       ]
+
+  edtChoiceForParfitsHitchhiker = edt [] stdSearch parfitsHitchhiker
+  testEdtChoiceForParfitsHitchhiker = test "EdtChoiceForParfitsHitchhiker" ("pay", -1000) edtChoiceForParfitsHitchhiker
+
+  edtChoiceForParfitsHitchhikerGivenInCity = edt [Guard "location" "city"] stdSearch parfitsHitchhiker
+  testEdtChoiceForParfitsHitchhikerGivenInCity = test "EdtChoiceForParfitsHitchhikerGivenInCity" ("no pay", 0) edtChoiceForParfitsHitchhikerGivenInCity
+
+  cdtChoiceForParfitsHitchhiker = cdt [] stdSearch parfitsHitchhiker
+  testCdtChoiceForParfitsHitchhiker = test "CdtChoiceForParfitsHitchhiker" ("no pay",-990099.0) cdtChoiceForParfitsHitchhiker
+
+  cdtChoiceForParfitsHitchhikerGivenInCity = cdt [Guard "location" "city"] stdSearch parfitsHitchhiker
+  testCdtChoiceForParfitsHitchhikerGivenInCity = test "CdtChoiceForParfitsHitchhikerGivenInCity" ("no pay", 0) cdtChoiceForParfitsHitchhikerGivenInCity
+
+  fdt :: Foldable t => Label -> t Guard -> Search -> Graph Stochastic -> (State, Utility)
+  fdt = stableDT . counterFactualize
+
+  counterFactualize :: Label -> Guard -> Endo [Probability (Graph Deterministic)]
+  counterFactualize l g ps = normalize $ concatMap (\s -> condition g $ intervene (Guard l s) ps) $ choices l ps
+
+  fdtChoiceForCausalNewcomb = fdt (Label "predisposition") [Guard (Label "box_b") (State "full")] stdSearch causalNewcomb
+  testFdtChoiceForCausalNewcomb = test "FdtChoiceForCausalNewcomb" ("onebox",1000000.0) fdtChoiceForCausalNewcomb
+
+  fdtChoiceForCausalXorBlackmail = fdt (Label "predisposition") [Guard (Label "observation") (State "letter")] stdSearch causalXorBlackmail
+  testFdtChoiceForCausalXorBlackmail = test "FdtChoiceForCausalXorBlackmail" ("refuse",-1000000.0) fdtChoiceForCausalXorBlackmail
+
+  fdtChoiceForDeathInDamascus = fdt (Label "predisposition") [] stdSearch deathInDamascus
+  testFdtChoiceDeathInDamascus = test "FdtChoiceForDeathInDamascus" ("stay",0.0) fdtChoiceForDeathInDamascus
+
+  fdtChoiceForParfitsHitchhiker = fdt (Label "predisposition") [Guard (Label "location") (State "city")] stdSearch parfitsHitchhiker
+  testFdtChoiceForParfitsHitchhiker = test "FdtChoiceForParfitsHitchhiker" ("pay",-1000.0) fdtChoiceForParfitsHitchhiker
+
+  tests = [testEdtChoiceForNewcomb
           ,testNewcombChoices
           ,testSquash
           ,testProbabilitiesForWeird
@@ -470,5 +537,12 @@ module EDT where
           ,testCdtChoiceForCausalXorBlackmail
           ,testEdtChoiceForDeathInDamascus
           ,testCdtDominanceForDeathInDamascus
-          )
-
+          ,testEdtChoiceForParfitsHitchhiker
+          ,testEdtChoiceForParfitsHitchhikerGivenInCity
+          ,testCdtChoiceForParfitsHitchhiker
+          ,testCdtChoiceForParfitsHitchhikerGivenInCity
+          ,testFdtChoiceForCausalNewcomb
+          ,testFdtChoiceForCausalXorBlackmail
+          ,testFdtChoiceDeathInDamascus
+          ,testFdtChoiceForParfitsHitchhiker
+          ]
