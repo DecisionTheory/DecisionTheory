@@ -1,6 +1,6 @@
 {-# LANGUAGE EmptyDataDecls, GADTs, StandaloneDeriving, OverloadedStrings #-}
 
-module EDT where
+module DecisionTheory where
 {--
  TODO
   Introduzir typeclasses nos locais apropriados
@@ -106,48 +106,6 @@ module EDT where
           describe l _                = l
           clauses = nub . sort . concatMap (\(Clause gs _) -> guards gs)
           guards  = nub . sort . map (\(Guard (Label n) _) -> n)
-
-  newcomb = Graph [Labeled "action"         action
-                  ,Labeled "accuracy"       accuracy
-                  ,Labeled "prediction"     prediction
-                  ,Labeled "predisposition" predisposition
-                  ,Labeled "box_b"          box_b
-                  ,Labeled "outcome"        outcome
-                  ,Labeled "value"          value
-                  ]
-    where action         = Distribution [Probability "onebox" 0.01
-                                        ,Probability "twobox" 0.99
-                                        ]
-          accuracy       = Distribution [Probability "accurate"   0.99
-                                        ,Probability "inaccurate" 0.01
-                                        ]
-          prediction     = Conditional [Clause [Guard "predisposition" "oneboxer", Guard "accuracy"   "accurate"] "p1"
-                                       ,Clause [Guard "predisposition" "twoboxer", Guard "accuracy"   "accurate"] "p2"
-                                       ,Clause [Guard "predisposition" "oneboxer", Guard "accuracy" "inaccurate"] "p2"
-                                       ,Clause [Guard "predisposition" "twoboxer", Guard "accuracy" "inaccurate"] "p1"
-                                       ]
-          predisposition = Conditional [Clause [Guard "action" "onebox"] "oneboxer"
-                                       ,Clause [Guard "action" "twobox"] "twoboxer"
-                                       ]
-          box_b          = Conditional [Clause [Guard "prediction" "p1"] "full"
-                                       ,Clause [Guard "prediction" "p2"] "empty"
-                                       ]
-          outcome        = Conditional [Clause [Guard "action" "onebox", Guard "box_b" "full" ] "1f"
-                                       ,Clause [Guard "action" "twobox", Guard "box_b" "full" ] "2f"
-                                       ,Clause [Guard "action" "onebox", Guard "box_b" "empty"] "1e"
-                                       ,Clause [Guard "action" "twobox", Guard "box_b" "empty"] "2e"
-                                       ]
-          value          = Conditional [Clause [Guard "outcome" "1f"] "1000000"
-                                       ,Clause [Guard "outcome" "2f"] "1001000"
-                                       ,Clause [Guard "outcome" "1e"]       "0"
-                                       ,Clause [Guard "outcome" "2e"]    "1000"
-                                       ]
-
-  edtChoiceForNewcomb = edt [] stdSearch newcomb
-
-  testEdtChoiceForNewcomb = test "EdtChoiceForNewcomb" ("onebox", 990000.0) $ edtChoiceForNewcomb
-
-  testNewcombChoices = test "NewcombChoices" ["onebox", "twobox"] $ choices "action" $ branches newcomb
 
   dt :: Foldable t => (Guard -> Endo [Probability (Graph Deterministic)]) -> t Guard -> Search -> Graph Stochastic -> (State, Utility)
   dt hypothesis gs (Search uf a o) g = maximumBy (comparing snd) $ map expectation $ hypotheticals
@@ -293,47 +251,6 @@ module EDT where
                      ,Probability (Graph [Labeled "a" (Always "a2"),Labeled "b" (Always "b2")]) 0.63
                      ]
 
-  causalNewcomb = Graph [Labeled "action"         action
-                        ,Labeled "accuracy"       accuracy
-                        ,Labeled "prediction"     prediction
-                        ,Labeled "predisposition" predisposition
-                        ,Labeled "box_b"          box_b
-                        ,Labeled "outcome"        outcome
-                        ,Labeled "value"          value
-                        ]
-    where predisposition = Distribution [Probability "oneboxer" 0.5
-                                        ,Probability "twoboxer" 0.5
-                                        ]
-          action         = Conditional [Clause [Guard "predisposition" "oneboxer"] "onebox"
-                                       ,Clause [Guard "predisposition" "twoboxer"] "twobox"
-                                       ]
-          accuracy       = Distribution [Probability "accurate"   0.99
-                                        ,Probability "inaccurate" 0.01
-                                        ]
-          prediction     = Conditional [Clause [Guard "predisposition" "oneboxer", Guard "accuracy"   "accurate"] "p1"
-                                       ,Clause [Guard "predisposition" "twoboxer", Guard "accuracy"   "accurate"] "p2"
-                                       ,Clause [Guard "predisposition" "oneboxer", Guard "accuracy" "inaccurate"] "p2"
-                                       ,Clause [Guard "predisposition" "twoboxer", Guard "accuracy" "inaccurate"] "p1"
-                                       ]
-          box_b          = Conditional [Clause [Guard "prediction" "p1"] "full"
-                                       ,Clause [Guard "prediction" "p2"] "empty"
-                                       ]
-          outcome        = Conditional [Clause [Guard "action" "onebox", Guard "box_b" "full" ] "1f"
-                                       ,Clause [Guard "action" "twobox", Guard "box_b" "full" ] "2f"
-                                       ,Clause [Guard "action" "onebox", Guard "box_b" "empty"] "1e"
-                                       ,Clause [Guard "action" "twobox", Guard "box_b" "empty"] "2e"
-                                       ]
-          value          = Conditional [Clause [Guard "outcome" "1f"] "1000000"
-                                       ,Clause [Guard "outcome" "2f"] "1001000"
-                                       ,Clause [Guard "outcome" "1e"]       "0"
-                                       ,Clause [Guard "outcome" "2e"]    "1000"
-                                       ]
-  edtChoiceForCausalNewcomb = edt [] stdSearch causalNewcomb
-
-  testEdtChoiceForCausalNewcomb = test "EdtChoiceForCausalNewcomb" ("onebox", 990000.0) $ edtChoiceForCausalNewcomb
-
-  testCausalNewcombChoices = test "CausalNewcombChoices" ["onebox", "twobox"] $ choices "action" $ branches newcomb
-
   xorBlackmail = Graph [Labeled "infestation" infestation
                        ,Labeled "prediction"  prediction
                        ,Labeled "action"      action
@@ -421,11 +338,11 @@ module EDT where
   mapBranches :: Endo (Labeled (Node a)) -> Endo (Probability (Graph a))
   mapBranches f = fmap (\(Graph lns) -> Graph (map f lns))
 
-  cdtChoiceForCausalNewcomb = cdt [] stdSearch causalNewcomb
-  testCdtChoiceForCausalNewcomb = test "CdtChoiceForCausalNewcomb" ("twobox", 11000.0) cdtChoiceForCausalNewcomb
+  replaceG :: Endo (Labeled (Node a)) -> Endo (Graph a)
+  replaceG f (Graph lns) = Graph $ map f lns
 
   cdtChoiceForCausalXorBlackmail = cdt [Guard "observation" "letter"] stdSearch causalXorBlackmail
-  testCdtChoiceForCausalXorBlackmail = test "CausalXorBlackmail" ("refuse", -1000000.0) cdtChoiceForCausalXorBlackmail
+  testCdtChoiceForCausalXorBlackmail = test "CdtChoiceForCausalXorBlackmail" ("refuse", -1000000.0) cdtChoiceForCausalXorBlackmail
 
 
   deathInDamascus = Graph [Labeled "predisposition" predisposition
@@ -462,6 +379,42 @@ module EDT where
                                    ]
 
   testCdtDominanceForDeathInDamascus = test "CdtDominanceForDeathInDamascus" [("flee",999.0),("stay",1000.0)] cdtDominanceForDeathInDamascus
+
+
+{--
+  data Predisposition = Accurate | Inaccurate
+
+
+  a = find typedParfitsHitchhiker :: Accuracy
+  instance TGraph g => Find a (TypedGraph a g) where
+    find (TypedGraph (Always a)) = a
+    ...
+
+  instance TGraph g, Find a g => Find a (TypedGraph b g) where
+    find (_ :+: g) = find g
+
+  TypedGraph Predisposition (TypedGraph Accuracy (TypedGraph Offer (TypedGraph Location (TypedGraph Action (TypedGraph Value (EmptyGraph))))))
+
+  typedParfitsHitchhiker =
+      Distribution [  Trustworthy %= 0.5
+                   ,Untrustworthy %= 0.5
+                   ]
+  :+: Distribution [  Accurate %= 0.99
+                   ,Inaccurate %= 0.01
+                   ]
+  :+: When (  Trustworthy :&:   Accurate)   Ride
+  :|: When (  Trustworthy :&: Inaccurate) NoRide
+  :|: When (Untrustworthy :&:   Accurate) NoRide
+  :|: When (Untrustworthy :&: Inaccurate)   Ride
+  :+: When   Ride City
+  :|: When NoRide Desert
+  :+: When (  Trustworthy :&:   City)   Pay
+  :|: Otherwise                       NoPay
+  :+: When (  Pay :&:   City)   Value -1000
+  :+: When (NoPay :&:   City)   Value 0
+  :|: Otherwise                 Value -1000000
+  :+: Graph0
+--}
 
   parfitsHitchhiker = Graph [Labeled "predisposition" predisposition
                             ,Labeled "accuracy"       accuracy
@@ -507,11 +460,12 @@ module EDT where
   fdt :: Foldable t => Label -> t Guard -> Search -> Graph Stochastic -> (State, Utility)
   fdt = stableDT . counterFactualize
 
+  {-- We start with a uniform prior over the possible predispositions, then compute the possible universes 
+      for each possible intervention on predisposition, and finally condition that distribution on the 
+      choice of action we're evaluating.
+   --}
   counterFactualize :: Label -> Guard -> Endo [Probability (Graph Deterministic)]
-  counterFactualize l g ps = normalize $ concatMap (\s -> condition g $ intervene (Guard l s) ps) $ choices l ps
-
-  fdtChoiceForCausalNewcomb = fdt (Label "predisposition") [Guard (Label "box_b") (State "full")] stdSearch causalNewcomb
-  testFdtChoiceForCausalNewcomb = test "FdtChoiceForCausalNewcomb" ("onebox",1000000.0) fdtChoiceForCausalNewcomb
+  counterFactualize l g ps = condition g $ normalize $ concatMap (\s -> intervene (Guard l s) ps) $ choices l ps
 
   fdtChoiceForCausalXorBlackmail = fdt (Label "predisposition") [Guard (Label "observation") (State "letter")] stdSearch causalXorBlackmail
   testFdtChoiceForCausalXorBlackmail = test "FdtChoiceForCausalXorBlackmail" ("refuse",-1000000.0) fdtChoiceForCausalXorBlackmail
@@ -522,18 +476,13 @@ module EDT where
   fdtChoiceForParfitsHitchhiker = fdt (Label "predisposition") [Guard (Label "location") (State "city")] stdSearch parfitsHitchhiker
   testFdtChoiceForParfitsHitchhiker = test "FdtChoiceForParfitsHitchhiker" ("pay",-1000.0) fdtChoiceForParfitsHitchhiker
 
-  tests = [testEdtChoiceForNewcomb
-          ,testNewcombChoices
-          ,testSquash
+  tests = [testSquash
           ,testProbabilitiesForWeird
           ,testWeirdBranches
           ,testBranches
-          ,testEdtChoiceForCausalNewcomb
-          ,testCausalNewcombChoices
           ,testNormalize
           ,testEdtChoiceForXorBlackmail
           ,testEdtChoiceForCausalXorBlackmail
-          ,testCdtChoiceForCausalNewcomb
           ,testCdtChoiceForCausalXorBlackmail
           ,testEdtChoiceForDeathInDamascus
           ,testCdtDominanceForDeathInDamascus
@@ -541,7 +490,6 @@ module EDT where
           ,testEdtChoiceForParfitsHitchhikerGivenInCity
           ,testCdtChoiceForParfitsHitchhiker
           ,testCdtChoiceForParfitsHitchhikerGivenInCity
-          ,testFdtChoiceForCausalNewcomb
           ,testFdtChoiceForCausalXorBlackmail
           ,testFdtChoiceDeathInDamascus
           ,testFdtChoiceForParfitsHitchhiker
