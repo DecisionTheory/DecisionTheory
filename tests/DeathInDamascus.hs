@@ -3,7 +3,10 @@
 module DeathInDamascus (tests) where
 
   import Test.Hspec
-  import DecisionTheory
+
+  import DecisionTheory.Probability
+  import DecisionTheory.Graph
+  import DecisionTheory.DecisionTheory
 
   deathInDamascus :: Graph Stochastic
   deathInDamascus = Graph [Labeled "predisposition" predisposition

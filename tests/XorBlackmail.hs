@@ -3,7 +3,10 @@
 module XorBlackmail (tests) where
 
   import Test.Hspec
-  import DecisionTheory
+
+  import DecisionTheory.Probability
+  import DecisionTheory.Graph
+  import DecisionTheory.DecisionTheory
 
   xorBlackmail :: Graph Stochastic
   xorBlackmail = Graph [Labeled "infestation"    infestation

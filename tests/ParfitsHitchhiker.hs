@@ -3,7 +3,10 @@
 module ParfitsHitchhiker (tests) where
 
   import Test.Hspec
-  import DecisionTheory
+
+  import DecisionTheory.Probability
+  import DecisionTheory.Graph
+  import DecisionTheory.DecisionTheory
 
   parfitsHitchhiker :: Graph Stochastic
   parfitsHitchhiker = Graph [Labeled "predisposition" predisposition

@@ -3,7 +3,10 @@
 module Newcomb (tests) where
 
   import Test.Hspec
-  import DecisionTheory
+
+  import DecisionTheory.Probability
+  import DecisionTheory.Graph
+  import DecisionTheory.DecisionTheory
 
   newcomb :: Graph Stochastic
   newcomb = Graph [Labeled "action"         action
@@ -47,17 +50,17 @@ module Newcomb (tests) where
 
   unreliableNewcomb :: Graph Stochastic
   unreliableNewcomb = replaceG unreliability newcomb
-    where unreliability ln@(Labeled l _) | l == Label "accuracy" = Labeled l $ Distribution [Probability (State "accurate")   0.5
-                                                                                            ,Probability (State "inaccurate") 0.5
-                                                                                            ]
-                                         | otherwise             = ln
+    where unreliability ln@(Labeled l _) | l == "accuracy" = Labeled l $ Distribution [Probability "accurate"   0.5
+                                                                                      ,Probability "inaccurate" 0.5
+                                                                                      ]
+                                         | otherwise       = ln
 
   lessUnreliableNewcomb :: Graph Stochastic
   lessUnreliableNewcomb = replaceG lesserUnreliability newcomb
-    where lesserUnreliability ln@(Labeled l _) | l == Label "accuracy" = Labeled l $ Distribution [Probability (State "accurate")   0.51
-                                                                                                  ,Probability (State "inaccurate") 0.49
-                                                                                                 ]
-                                               | otherwise             = ln
+    where lesserUnreliability ln@(Labeled l _) | l == "accuracy" = Labeled l $ Distribution [Probability "accurate"   0.51
+                                                                                            ,Probability "inaccurate" 0.49
+                                                                                            ]
+                                               | otherwise       = ln
 
   tests :: IO ()
   tests = hspec $ do

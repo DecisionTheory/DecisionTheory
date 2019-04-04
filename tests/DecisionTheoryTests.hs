@@ -1,9 +1,15 @@
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE OverloadedStrings, ViewPatterns #-}
 
 module DecisionTheoryTests (tests) where
 
   import Test.Hspec
-  import DecisionTheory
+  import Test.Hspec.QuickCheck
+  import qualified Test.QuickCheck as QC
+  import qualified Test.QuickCheck.Function as QCF
+
+  import DecisionTheory.Probability
+  import DecisionTheory.Graph
+  import DecisionTheory.DecisionTheory
 
   weird :: Graph Stochastic
   weird = Graph [Labeled "a" a
@@ -48,6 +54,21 @@ module DecisionTheoryTests (tests) where
                    ,Probability (Graph [Labeled "a" (Always "a2"),Labeled "b" (Always "b2")]) 0.63
                    ]
 
+  instance QC.Arbitrary a => QC.Arbitrary (Probability a) where
+    arbitrary = do e <- QC.arbitrary
+                   v <- QC.arbitrary
+                   return $ Probability e v
+
+  -- props to https://austinrochford.com/posts/2014-05-27-quickcheck-laws.html
+  monadLeftIdProp :: (Monad m, Eq (m b)) => a -> QCF.Fun a (m b) -> Bool
+  monadLeftIdProp x (QCF.apply -> f) = (return x >>= f) == (f x)
+
+  monadRightIdProp :: (Monad m, Eq (m a)) => m a -> Bool
+  monadRightIdProp x = (x >>= return) == x
+
+  monadAssocProp :: (Monad m, Eq (m c)) => m a -> QCF.Fun a (m b) -> QCF.Fun b (m c) -> Bool
+  monadAssocProp x (QCF.apply -> f) (QCF.apply -> g) = ((x >>= f) >>= g) == (x >>= (\x' -> f x' >>= g))
+
   tests :: IO ()
   tests = hspec $ do
     describe "Probability tests" $ do
@@ -61,3 +82,7 @@ module DecisionTheoryTests (tests) where
         branches simple `shouldBe` simpleBranches
       it "\"Simple\" branches" $ do
         normalize [Probability ("A" :: String) 0.1, Probability "B" 0.3] `shouldBe` [Probability "A" 0.25,Probability "B" 0.75]
+    describe "Probability Monad laws" $ do
+      prop "Left Identity" (monadLeftIdProp :: Int -> QCF.Fun Int (Probability String) -> Bool)
+      prop "Right Identity" (monadRightIdProp :: Probability String -> Bool)
+      prop "Associativity" (monadAssocProp :: Probability Int -> QCF.Fun Int (Probability String) -> QCF.Fun String (Probability Float) -> Bool)
