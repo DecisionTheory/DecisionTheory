@@ -1,10 +1,14 @@
-module Newcomb (main) where
+{-# LANGUAGE OverloadedStrings #-}
+
+module Newcomb (tests) where
 
   import Test.Hspec
-  import Test.Hspec.QuickCheck
-  import DecisionTheory
-  import Test.QuickCheck
 
+  import DecisionTheory.Probability
+  import DecisionTheory.Graph
+  import DecisionTheory.DecisionTheory
+
+  newcomb :: Graph Stochastic
   newcomb = Graph [Labeled "action"         action
                   ,Labeled "accuracy"       accuracy
                   ,Labeled "prediction"     prediction
@@ -41,36 +45,37 @@ module Newcomb (main) where
                                        ,Clause [Guard "outcome" "2e"]    "1000"
                                        ]
 
-  newcombOf dt = dt [] stdSearch newcomb
+  newcombOf :: ([Guard] -> Search -> Graph Stochastic -> a) -> a
+  newcombOf t = t [] stdSearch newcomb
 
-  main :: IO ()
-  main = hspec $ do
-    describe "Newcomb" $ do
-      it "EDT chooses to onebox " $ do
-        newcombOf edt `shouldBe` ("onebox", 990000.0)
+  unreliableNewcomb :: Graph Stochastic
+  unreliableNewcomb = replaceG unreliability newcomb
+    where unreliability ln@(Labeled l _) | l == "accuracy" = Labeled l $ Distribution [Probability "accurate"   0.5
+                                                                                      ,Probability "inaccurate" 0.5
+                                                                                      ]
+                                         | otherwise       = ln
 
-
-  testCausalNewcombChoices = test "CausalNewcombChoices" ["onebox", "twobox"] $ choices "action" $ branches newcomb
-
-  cdtChoiceForCausalNewcomb = cdt [] stdSearch causalNewcomb
-  testCdtChoiceForCausalNewcomb = test "CdtChoiceForCausalNewcomb" ("twobox", 11000.0) cdtChoiceForCausalNewcomb
-
-  fdtChoiceForCausalNewcomb = fdt (Label "predisposition") [] stdSearch causalNewcomb
-  testFdtChoiceForCausalNewcomb = test "FdtChoiceForCausalNewcomb" ("onebox",990000.0) fdtChoiceForCausalNewcomb
-
-  fdtChoiceForTransparentCausalNewcomb = fdt (Label "predisposition") [Guard (Label "box_b") (State "full")] stdSearch causalNewcomb
-  testFdtChoiceForTransparentCausalNewcomb = test "FdtChoiceForTransparentCausalNewcomb" ("onebox",1000000.0) fdtChoiceForTransparentCausalNewcomb
-
-  fdtChoiceForCausalUnreliableNewcomb = fdt (Label "predisposition") [] stdSearch $ replaceG unreliability causalNewcomb 
-    where unreliability ln@(Labeled l n) | l == Label "accuracy" = Labeled l $ Distribution [Probability (State "accurate")   0.5
-                                                                                            ,Probability (State "inaccurate") 0.5
+  lessUnreliableNewcomb :: Graph Stochastic
+  lessUnreliableNewcomb = replaceG lesserUnreliability newcomb
+    where lesserUnreliability ln@(Labeled l _) | l == "accuracy" = Labeled l $ Distribution [Probability "accurate"   0.51
+                                                                                            ,Probability "inaccurate" 0.49
                                                                                             ]
-                                         | otherwise             = ln
-  testFdtChoiceForCausalUnreliableNewcomb = test "FdtChoiceForCausalUnreliableNewcomb" ("twobox",501000.0) fdtChoiceForCausalUnreliableNewcomb
+                                               | otherwise       = ln
 
-  fdtChoiceForCausalLessUnreliableNewcomb = fdt (Label "predisposition") [] stdSearch $ replaceG lesserUnreliability causalNewcomb 
-    where lesserUnreliability ln@(Labeled l n) | l == Label "accuracy" = Labeled l $ Distribution [Probability (State "accurate")   0.51
-                                                                                                  ,Probability (State "inaccurate") 0.49
-                                                                                                 ]
-                                               | otherwise             = ln
-  testFdtChoiceForCausalLessUnreliableNewcomb = test "FdtChoiceForCausalLessUnreliableNewcomb" ("onebox",510000.0) fdtChoiceForCausalLessUnreliableNewcomb
+  tests :: IO ()
+  tests = hspec $ do
+    describe "Newcomb" $ do
+      it "Newcomb allows one to onebox or twobox" $ do
+        (choices "action" $ branches newcomb) `shouldBe` ["onebox", "twobox"]
+      it "EDT chooses to onebox" $ do
+        newcombOf edt `shouldBe` ("onebox", 990000.0)
+      it "CDT chooses to twobox" $ do
+        newcombOf cdt `shouldBe` ("twobox", 11000.0)
+      it "FDT chooses to onebox" $ do
+        newcombOf (fdt "predisposition") `shouldBe` ("onebox", 990000.0)
+      it "FDT chooses to onebox even with transparency" $ do
+        fdt "predisposition" [Guard "box_b" "full"] stdSearch newcomb `shouldBe` ("onebox", 1000000.0)
+      it "FDT chooses to twobox when Omega prediction is unreliable" $ do
+        fdt "predisposition" [] stdSearch unreliableNewcomb `shouldBe` ("twobox",501000.0)
+      it "FDT chooses to onebox when Omega prediction is less unreliable" $ do
+        fdt "predisposition" [] stdSearch lessUnreliableNewcomb `shouldBe` ("onebox",510000.0)
