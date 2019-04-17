@@ -14,3 +14,9 @@ module DecisionTheory.Base where
 
   instance IsString State where
     fromString = State
+
+  data Labeled a = Labeled Label a
+    deriving (Eq, Show)
+
+  instance Functor Labeled where
+    fmap f (Labeled l a) = Labeled l (f a)

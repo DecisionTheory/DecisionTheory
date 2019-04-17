@@ -4,6 +4,7 @@ module XorBlackmail (tests) where
 
   import Test.Hspec
 
+  import DecisionTheory.Base
   import DecisionTheory.Probability
   import DecisionTheory.Graph
   import DecisionTheory.DecisionTheory

@@ -31,12 +31,6 @@ module DecisionTheory.Graph where
     deriving (Eq, Show)
   unGraph (Graph g) = g
 
-  data Labeled a = Labeled Label a
-    deriving (Eq, Show)
-
-  instance Functor Labeled where
-    fmap f (Labeled l a) = Labeled l (f a)
-
   dot :: String -> Graph a -> String
   dot s (Graph lns) = "digraph " ++ s ++ " {\r\n" ++ nodes ++ "}\r\n"
     where nodes = foldr (++) "" $ map prettyPrint lns

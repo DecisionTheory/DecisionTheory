@@ -16,7 +16,7 @@ extra-source-files:  README.md
 cabal-version:       >=1.10
 
 library
-  exposed-modules:     DecisionTheory.Base, DecisionTheory.Probability, DecisionTheory.Graph, DecisionTheory.DecisionTheory
+  exposed-modules:     DecisionTheory.Base, DecisionTheory.Probability, DecisionTheory.Graph, DecisionTheory.TypedGraph, DecisionTheory.DecisionTheory
   -- other-modules:       
   other-extensions:    EmptyDataDecls, GADTs, StandaloneDeriving, OverloadedStrings
   build-depends:       base >=4.8 && <4.9, containers >=0.5 && <0.6
