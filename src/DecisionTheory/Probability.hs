@@ -15,6 +15,8 @@ module DecisionTheory.Probability where
   mkProbability a x | x > 0 && x < 1 = Probability a x
                     | otherwise      = error $ "Invalid probability " ++ show x
 
+  (%=) = Probability
+
   prior :: Rational -> Probability ()
   prior = Probability ()
 

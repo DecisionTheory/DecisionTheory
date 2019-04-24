@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings, ViewPatterns #-}
+{-# LANGUAGE EmptyDataDecls, OverloadedStrings, ViewPatterns #-}
 
 module DecisionTheoryTests (tests) where
 
@@ -7,9 +7,9 @@ module DecisionTheoryTests (tests) where
   import qualified Test.QuickCheck as QC
   import qualified Test.QuickCheck.Function as QCF
 
+  import DecisionTheory.Base
   import DecisionTheory.Probability
   import DecisionTheory.Graph
-  import DecisionTheory.DecisionTheory
 
   weird :: Graph Stochastic
   weird = Graph [Labeled "a" a
@@ -68,6 +68,7 @@ module DecisionTheoryTests (tests) where
 
   monadAssocProp :: (Monad m, Eq (m c)) => m a -> QCF.Fun a (m b) -> QCF.Fun b (m c) -> Bool
   monadAssocProp x (QCF.apply -> f) (QCF.apply -> g) = ((x >>= f) >>= g) == (x >>= (\x' -> f x' >>= g))
+
 
   tests :: IO ()
   tests = hspec $ do
