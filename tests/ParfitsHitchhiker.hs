@@ -71,14 +71,11 @@ module ParfitsHitchhiker (tests) where
           :|: When (Is NoPay :&: Is City) (Box $ Value $        0)
           :|: Otherwise                   (Box $ Value $ -1000000))
 
-  phSearch = (Search uf (Label "Action") (Label "Value"))
-    where uf (State s) = read s
-
   parfitsHitchhikerOf :: ([U.Guard] -> Search -> U.Graph U.Stochastic -> a) -> a
-  parfitsHitchhikerOf t = t [] phSearch parfitsHitchhiker
+  parfitsHitchhikerOf t = t [] stdSearch parfitsHitchhiker
 
   parfitsHitchhikerInTheCityOf :: ([U.Guard] -> Search -> U.Graph U.Stochastic -> a) -> a
-  parfitsHitchhikerInTheCityOf t = t [U.Guard "Location" "City"] phSearch parfitsHitchhiker
+  parfitsHitchhikerInTheCityOf t = t [U.Guard "Location" "City"] stdSearch parfitsHitchhiker
 
   tests :: IO ()
   tests = hspec $ do
@@ -97,3 +94,5 @@ module ParfitsHitchhiker (tests) where
         parfitsHitchhikerOf (fdt "Predisposition") `shouldBe` ("Pay", -1000.0)
       it "FDT later still chooses to pay" $ do
         parfitsHitchhikerInTheCityOf (fdt "Predisposition") `shouldBe` ("Pay", -1000.0)
+      it "Typed graph should compile to the untyped graph" $ do
+        compile typedParfitsHitchhiker `shouldBe` parfitsHitchhiker
