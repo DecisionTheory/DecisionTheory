@@ -14,7 +14,7 @@ module DecisionTheory.DecisionTheory where
   type Utility = Float
 
   data Search = Search (State -> Utility) Label Label
-  stdSearch = (Search uf (Label "action") (Label "value"))
+  stdSearch = (Search uf (Label "Action") (Label "Value"))
     where uf (State s) = read s
 
   dt :: Foldable t => (Guard -> Endo [Probability (Graph Deterministic)]) -> t Guard -> Search -> Graph Stochastic -> (State, Utility)
