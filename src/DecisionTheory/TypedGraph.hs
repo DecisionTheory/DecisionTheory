@@ -18,21 +18,21 @@ module DecisionTheory.TypedGraph where
   data AlwaysT a
   data AppendT a b
 
-  data family Graph g
-  data instance Graph (DistributionT a) = Distribution [Probability a]
-  data instance Graph (ConditionalT a) = Case a
-  data instance Graph (AlwaysT a) = Always a
-  data instance Graph (AppendT a b) = Graph a :*: Graph b
+  data family Graph (o :: [*]) g
+  data instance Graph '[a]      (DistributionT a)           = Distribution [Probability a]
+  data instance Graph '[a]      (ConditionalT (Clause c a)) = Case (Clause c a)
+  data instance Graph '[a]      (AlwaysT a)                 = Always a
+  data instance Graph (o ': os) (AppendT a b)               = Graph '[o] a :*: Graph os b
 
   infixr 3 :*:
 
-  instance Show a => Show (Graph (DistributionT a)) where
+  instance Show a => Show (Graph '[a] (DistributionT a)) where
     show (Distribution ps) = "Distribution " ++ show ps
-  instance Show a => Show (Graph (ConditionalT a)) where
+  instance Show (Clause c a) => Show (Graph '[a] (ConditionalT (Clause c a))) where
     show (Case a) = "Case (" ++ show a ++ ")"
-  instance Show a => Show (Graph (AlwaysT a)) where
+  instance Show a => Show (Graph '[a] (AlwaysT a)) where
     show (Always a) = "Always " ++ show a
-  instance (Show (Graph a), Show (Graph b)) => Show (Graph (AppendT a b)) where
+  instance (Show (Graph '[o] a), Show (Graph os b)) => Show (Graph (o ': os) (AppendT a b)) where
     show (a :*: b) = show a ++ " :*: " ++ show b
 
 
@@ -42,18 +42,18 @@ module DecisionTheory.TypedGraph where
   data UnguardedT
   data DisjunctionT a b
 
-  data family Clause c
-  data instance Clause (GuardedT a, v) = When a v
-  data instance Clause (DisjunctionT a b, v) = Clause (a, v) :|: Clause (b, v)
-  data instance Clause (UnguardedT, v) = Otherwise v
+  data family Clause c v
+  data instance Clause (GuardedT a)       v = When a v
+  data instance Clause (DisjunctionT a b) v = Clause a v :|: Clause b v
+  data instance Clause  UnguardedT        v = Otherwise v
 
   infixr 5 :|:
 
-  instance (Show a, Show v) => Show (Clause (GuardedT a, v)) where
+  instance (Show a, Show v) => Show (Clause (GuardedT a) v) where
     show (When a v) = "When (" ++ show a ++ ") " ++ show v
-  instance (Show (Clause (a, v)), Show (Clause (b, v)), Show v) => Show (Clause (DisjunctionT a b, v)) where
+  instance (Show (Clause a v), Show (Clause b v), Show v) => Show (Clause (DisjunctionT a b) v) where
     show (a :|: b) = show a ++ " :|: " ++ show b
-  instance (Show v) => Show (Clause (UnguardedT, v)) where
+  instance (Show v) => Show (Clause UnguardedT v) where
     show (Otherwise v) = "Otherwise " ++ show v
 
 
@@ -67,6 +67,7 @@ module DecisionTheory.TypedGraph where
   data instance Guard (AndT a b) = Guard a :&: Guard b
 
   infixr 7 :&:
+
 
   instance Show a => Show (Guard (IsT a)) where
     show (Is a) = show a
@@ -103,24 +104,23 @@ module DecisionTheory.TypedGraph where
 
 
 
-
   class NodeValue a b | a -> b where
     nodeValue :: a -> b
 
-  instance NodeValue (Graph (DistributionT a)) a where
+  instance NodeValue (Graph '[a] (DistributionT a)) a where
     nodeValue (Distribution ps) = probabilityElement $ head $ ps 
-  instance NodeValue (Graph (AlwaysT a)) a where
+  instance NodeValue (Graph '[a] (AlwaysT a)) a where
     nodeValue (Always a) = a
-  instance NodeValue c a => NodeValue (Graph (ConditionalT c)) a where
+  instance NodeValue (Clause c a) a => NodeValue (Graph '[a] (ConditionalT (Clause c a))) a where
     nodeValue (Case c) = nodeValue c
-  instance (NodeValue (Graph a) c, NodeValue (Graph b) c) => NodeValue (Graph (AppendT a b)) c where
+  instance (NodeValue (Graph '[o] a) c, NodeValue (Graph os b) c) => NodeValue (Graph (o ': os) (AppendT a b)) c where
     nodeValue (a :*: _) = nodeValue a
 
-  instance NodeValue (Clause (UnguardedT, v)) v where
+  instance NodeValue (Clause UnguardedT v) v where
     nodeValue (Otherwise v) = v
-  instance (NodeValue (Clause (a, v)) v, NodeValue (Clause (b, v)) v) => NodeValue (Clause (DisjunctionT a b, v)) v where
+  instance (NodeValue (Clause a v) v, NodeValue (Clause b v) v) => NodeValue (Clause (DisjunctionT a b) v) v where
     nodeValue (a :|: _) = nodeValue a
-  instance NodeValue (Clause (GuardedT a, v)) v where
+  instance NodeValue (Clause (GuardedT a) v) v where
     nodeValue (When _ v) = v
 
 
@@ -129,20 +129,20 @@ module DecisionTheory.TypedGraph where
   class Compilable a b | a -> b where
     compile :: a -> b
 
-  instance (Labelable a, Stateable a) => Compilable (Graph (AlwaysT a)) (U.Graph U.Stochastic) where
+  instance (Labelable a, Stateable a) => Compilable (Graph '[a] (AlwaysT a)) (U.Graph U.Stochastic) where
     compile n@(Always a) = U.Graph [Labeled (toLabel $ nodeValue n) (U.Always $ toState a)]
-  instance (Labelable a, Stateable a) => Compilable (Graph (DistributionT a)) (U.Graph U.Stochastic) where
+  instance (Labelable a, Stateable a) => Compilable (Graph '[a] (DistributionT a)) (U.Graph U.Stochastic) where
     compile n@(Distribution ps) = U.Graph [Labeled (toLabel $ nodeValue n) (U.Distribution $ map (fmap toState) ps)]
-  instance (NodeValue (Graph (ConditionalT c)) v, Labelable v, Compilable c [U.Clause]) => Compilable (Graph (ConditionalT c)) (U.Graph U.Stochastic) where
+  instance (NodeValue (Clause c a) a, Labelable a, Compilable (Clause c a) [U.Clause]) => Compilable (Graph '[a] (ConditionalT (Clause c a))) (U.Graph U.Stochastic) where
     compile n@(Case c) = U.Graph [Labeled (toLabel $ nodeValue n) (U.Conditional $ compile c)]
-  instance (Compilable (Graph a) (U.Graph U.Stochastic), Compilable (Graph b) (U.Graph U.Stochastic)) => Compilable (Graph (AppendT a b)) (U.Graph U.Stochastic) where
+  instance (Compilable (Graph '[o] a) (U.Graph U.Stochastic), Compilable (Graph os b) (U.Graph U.Stochastic)) => Compilable (Graph (o ': os) (AppendT a b)) (U.Graph U.Stochastic) where
     compile (a :*: b) = U.Graph ((U.unGraph . compile) a ++ (U.unGraph . compile) b)
 
-  instance Stateable v => Compilable (Clause (UnguardedT, v)) [U.Clause] where
+  instance Stateable v => Compilable (Clause UnguardedT v) [U.Clause] where
     compile (Otherwise v) = [U.Clause [] (toState v)]
-  instance (Compilable (Clause (a, v)) [U.Clause], Compilable (Clause (b, v)) [U.Clause], Stateable v) => Compilable (Clause (DisjunctionT a b, v)) [U.Clause] where
+  instance (Compilable (Clause a v) [U.Clause], Compilable (Clause b v) [U.Clause], Stateable v) => Compilable (Clause (DisjunctionT a b) v) [U.Clause] where
     compile (a :|: b) = compile a ++ compile b
-  instance (Compilable a [U.Guard], Stateable v) => Compilable (Clause (GuardedT a, v)) [U.Clause] where
+  instance (Compilable a [U.Guard], Stateable v) => Compilable (Clause (GuardedT a) v) [U.Clause] where
     compile (When a v) = [U.Clause (compile a) (toState v)]
 
   instance (Labelable a, Stateable a) => Compilable (Guard (IsT a)) [U.Guard] where
