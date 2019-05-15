@@ -52,8 +52,8 @@ module XorBlackmail (tests) where
   data Action         = Pay        | Refuse      deriving (Eq, Show, Typeable, Data)
   data Value          = Value Int                deriving (Eq, Show, Typeable, Data)
 
-  instance Unboxed Value where
-    unboxed (Value n) = show n
+  instance {-# OVERLAPS #-} Stateable Value where
+    toState (Value n) = State $ show n
 
   typedXorBlackmail =
         Distribution [  Termites %= 0.5
@@ -70,10 +70,10 @@ module XorBlackmail (tests) where
           :|: When (Is Skeptic)  NoLetter)
     :*: Case (When (Is   Payer) Pay
           :|: When (Is Refuser) Refuse)
-    :*: Case (When (Is   Termites :&: Is Pay)    (Box $ Value $ -1001000)
-          :|: When (Is   Termites :&: Is Refuse) (Box $ Value $ -1000000)
-          :|: When (Is NoTermites :&: Is Pay)    (Box $ Value $    -1000)
-          :|: When (Is NoTermites :&: Is Refuse) (Box $ Value $        0))
+    :*: Case (When (Is   Termites :&: Is Pay)    (Value $ -1001000)
+          :|: When (Is   Termites :&: Is Refuse) (Value $ -1000000)
+          :|: When (Is NoTermites :&: Is Pay)    (Value $    -1000)
+          :|: When (Is NoTermites :&: Is Refuse) (Value $        0))
 
   xorBlackmailOf :: ([U.Guard] -> Search -> U.Graph U.Stochastic -> a) -> a
   xorBlackmailOf t = t [U.Guard "Observation" "Letter"] stdSearch xorBlackmail

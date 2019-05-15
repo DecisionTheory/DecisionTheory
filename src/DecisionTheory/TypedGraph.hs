@@ -1,5 +1,5 @@
 {-# LANGUAGE StandaloneDeriving, DataKinds, TypeFamilies, TypeOperators, FlexibleInstances, FlexibleContexts
-           , MultiParamTypeClasses, FunctionalDependencies, UndecidableInstances, DeriveDataTypeable
+           , MultiParamTypeClasses, FunctionalDependencies, UndecidableInstances, DeriveDataTypeable, GADTs
   #-}
 
 module DecisionTheory.TypedGraph where
@@ -77,21 +77,11 @@ module DecisionTheory.TypedGraph where
 
 
 
-  class Unboxed a where
-    unboxed :: a -> String
-
-  data Box a = Box a
-    deriving (Eq, Show)
-  unbox (Box a) = a
-
   class Stateable a where
     toState :: a -> State
 
   instance Data a => Stateable a where
     toState = State . showConstr . toConstr
-
-  instance {-# OVERLAPS #-} Unboxed a => Stateable (Box a) where
-    toState = State . unboxed . unbox
 
   class Labelable a where
     toLabel :: a -> Label
@@ -99,8 +89,6 @@ module DecisionTheory.TypedGraph where
   instance Typeable a => Labelable a where
     toLabel = Label . tyConName . typeRepTyCon . typeOf
 
-  instance {-# OVERLAPS #-} Labelable a => Labelable (Box a) where
-    toLabel = toLabel . unbox
 
 
 

@@ -49,8 +49,8 @@ module ParfitsHitchhiker (tests) where
   data Offer          = Ride        | NoRide        deriving (Eq, Show, Typeable, Data)
   data Value          = Value Int                   deriving (Eq, Show, Typeable, Data)
 
-  instance Unboxed Value where
-    unboxed (Value n) = show n
+  instance {-# OVERLAPS #-} Stateable Value where
+    toState (Value n) = State $ show n
 
   typedParfitsHitchhiker = 
         Distribution [  Trustworthy %= 0.5
@@ -67,9 +67,9 @@ module ParfitsHitchhiker (tests) where
           :|: When (Is NoRide) Desert)
     :*: Case (When (Is Trustworthy :&: Is City)   Pay
           :|: Otherwise                         NoPay)
-    :*: Case (When (Is   Pay :&: Is City) (Box $ Value $    -1000)
-          :|: When (Is NoPay :&: Is City) (Box $ Value $        0)
-          :|: Otherwise                   (Box $ Value $ -1000000))
+    :*: Case (When (Is   Pay :&: Is City) (Value $    -1000)
+          :|: When (Is NoPay :&: Is City) (Value $        0)
+          :|: Otherwise                   (Value $ -1000000))
 
   parfitsHitchhikerOf :: ([U.Guard] -> Search -> U.Graph U.Stochastic -> a) -> a
   parfitsHitchhikerOf t = t [] stdSearch parfitsHitchhiker

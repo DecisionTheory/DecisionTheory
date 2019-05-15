@@ -47,8 +47,8 @@ module DeathInDamascus (tests) where
                       | FleeAndDie | FleeAndLive deriving (Eq, Show, Typeable, Data)
   data Value          = Value Int                deriving (Eq, Show, Typeable, Data)
 
-  instance Unboxed Value where
-    unboxed (Value n) = show n
+  instance {-# OVERLAPS #-} Stateable Value where
+    toState (Value n) = State $ show n
 
   typedDeathInDamascus =
         Distribution [ Fleer %= 0.5
@@ -62,10 +62,10 @@ module DeathInDamascus (tests) where
           :|: When (Is Stay :&: Is Aleppo)   StayAndLive
           :|: When (Is Flee :&: Is Damascus) FleeAndLive
           :|: When (Is Flee :&: Is Aleppo)   FleeAndDie)
-    :*: Case (When (Is StayAndDie)  (Box $ Value $    0)
-          :|: When (Is StayAndLive) (Box $ Value $ 1000)
-          :|: When (Is FleeAndLive) (Box $ Value $  999)
-          :|: When (Is FleeAndDie)  (Box $ Value $   -1))
+    :*: Case (When (Is StayAndDie)  (Value $    0)
+          :|: When (Is StayAndLive) (Value $ 1000)
+          :|: When (Is FleeAndLive) (Value $  999)
+          :|: When (Is FleeAndDie)  (Value $   -1))
 
   deathInDamascusOf :: ([U.Guard] -> Search -> U.Graph U.Stochastic -> a) -> a
   deathInDamascusOf t = t [] stdSearch deathInDamascus
