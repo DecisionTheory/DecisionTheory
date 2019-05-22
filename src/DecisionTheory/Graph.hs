@@ -56,6 +56,9 @@ module DecisionTheory.Graph where
   probabilities :: Label -> [Probability (Graph Deterministic)] -> [Probability State]
   probabilities l = squash (when (==)) . M.catMaybes . map find'
     where find' (Probability g p) = fmap (flip Probability p) (find l g)
+          when :: (a -> a -> Bool) -> (a -> a -> Maybe a)
+          when (==) a1 a2 | a1 == a2  = Just a1
+                          | otherwise = Nothing
 
   choices :: Label -> [Probability (Graph Deterministic)] -> [State]
   choices l = map probabilityElement . probabilities l
