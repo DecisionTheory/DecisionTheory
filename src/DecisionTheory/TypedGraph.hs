@@ -33,8 +33,11 @@ module DecisionTheory.TypedGraph where
     Difference '[] bs = '[]
     Difference as (b ': bs) = Difference (Delete b as) bs
 
+  type family Intersection as bs where
+    Intersection as bs = (Difference (Union as bs) (Union (Difference as bs) (Difference bs as)))
 
-
+  class IsEmpty (e :: [*])
+  instance IsEmpty '[]
 
   newtype E (i :: [*]) (o :: [*]) a = E a
 
@@ -147,7 +150,13 @@ module DecisionTheory.TypedGraph where
   depends :: E i '[o] (Clause c o) -> E i '[o] (Graph (ConditionalT (Clause c o)))
   depends (E c) = E (Case c)
 
-  (.*.) :: E i '[o] (Graph g) -> E j p (Graph h) -> E (Union (Difference i p) (Difference j '[o])) (Union '[o] p)  (Graph (AppendT g h))
+  class NoDuplicatedOutputs (o :: [*])
+  instance NoDuplicatedOutputs '[]
+
+  class OutputShouldPrecedeInput (o :: [*])
+  instance OutputShouldPrecedeInput '[]
+
+  (.*.) :: (NoDuplicatedOutputs (Intersection '[o] p), OutputShouldPrecedeInput (Intersection i p)) => E i '[o] (Graph g) -> E j p (Graph h) -> E (Union i (Difference j '[o])) (Union '[o] p)  (Graph (AppendT g h))
   infixr 3 .*.
   E g .*. E h = E (g :*: h)
 
