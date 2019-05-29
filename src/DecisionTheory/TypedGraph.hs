@@ -182,7 +182,7 @@ module DecisionTheory.TypedGraph where
     nodeValue :: a -> b
 
   instance NodeValue (Graph (DistributionT a)) a where
-    nodeValue (Distribution ps) = probabilityElement $ head $ ps 
+    nodeValue (Distribution ps) = probabilityElement $ head $ ps
   instance NodeValue (Graph  (AlwaysT a)) a where
     nodeValue (Always a) = a
   instance NodeValue (Clause c a) a => NodeValue (Graph (ConditionalT (Clause c a))) a where

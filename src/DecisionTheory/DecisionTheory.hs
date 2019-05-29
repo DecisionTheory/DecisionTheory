@@ -20,8 +20,8 @@ module DecisionTheory.DecisionTheory where
   dt :: Foldable t => (Guard -> Endo [Probability (Graph Deterministic)]) -> t Guard -> Search -> Graph Stochastic -> (State, Utility)
   dt hypothesis gs (Search uf a o) g = L.maximumBy (comparing snd) $ map expectation $ hypotheticals
     where hypotheticals :: [(State, [Probability (Graph Deterministic)])]
-          hypotheticals = M.catMaybes $ map (hypothetical.conclusion) $ choices a $ branches g
-          hypothetical (v, []) = Nothing
+          hypotheticals = M.mapMaybe (hypothetical.conclusion) $ choices a $ branches g
+          hypothetical (_, []) = Nothing
           hypothetical c       = Just c
           conclusion v = (v, hypothesis (Guard a v) possibleBranches)
           possibleBranches = foldl (flip condition) (branches g) gs
@@ -64,4 +64,3 @@ module DecisionTheory.DecisionTheory where
    --}
   counterFactualize :: Label -> Guard -> Endo [Probability (Graph Deterministic)]
   counterFactualize l g ps = condition g $ normalize $ concatMap (\s -> intervene (Guard l s) ps) $ choices l ps
-  
