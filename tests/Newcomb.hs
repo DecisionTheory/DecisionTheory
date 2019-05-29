@@ -58,8 +58,8 @@ module Newcomb (tests) where
   data Outcome        = F1 | F2  | E1 | E2    deriving (Eq, Show, Typeable, Data)
   data Value          = Value Int             deriving (Eq, Show, Typeable, Data)
 
-  instance Unboxed Value where
-    unboxed (Value n) = show n
+  instance {-# OVERLAPS #-} Stateable Value where
+    toState (Value n) = State $ show n
 
   typedNewcomb =
         Distribution [Oneboxer %= 0.5
@@ -80,10 +80,10 @@ module Newcomb (tests) where
           :|: When (Is Twobox :&: Is  Full) F2
           :|: When (Is Onebox :&: Is Empty) E1
           :|: When (Is Twobox :&: Is Empty) E2)
-    :*: Case (When (Is F1) (Box $ Value $ 1000000)
-          :|: When (Is F2) (Box $ Value $ 1001000)
-          :|: When (Is E1) (Box $ Value $       0)
-          :|: When (Is E2) (Box $ Value $    1000))
+    :*: Case (When (Is F1) (Value $ 1000000)
+          :|: When (Is F2) (Value $ 1001000)
+          :|: When (Is E1) (Value $       0)
+          :|: When (Is E2) (Value $    1000))
 
   newcombOf :: ([U.Guard] -> Search -> U.Graph U.Stochastic -> a) -> a
   newcombOf t = t [] stdSearch newcomb

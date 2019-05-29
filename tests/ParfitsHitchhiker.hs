@@ -49,27 +49,27 @@ module ParfitsHitchhiker (tests) where
   data Offer          = Ride        | NoRide        deriving (Eq, Show, Typeable, Data)
   data Value          = Value Int                   deriving (Eq, Show, Typeable, Data)
 
-  instance Unboxed Value where
-    unboxed (Value n) = show n
+  instance {-# OVERLAPS #-} Stateable Value where
+    toState (Value n) = State $ show n
 
   typedParfitsHitchhiker = 
-        Distribution [  Trustworthy %= 0.5
+        distribution [  Trustworthy %= 0.5
                      ,Untrustworthy %= 0.5
                      ]
-    :*: Distribution [  Accurate %= 0.99
+    .*. distribution [  Accurate %= 0.99
                      ,Inaccurate %= 0.01
                      ]
-    :*: Case (When (Is   Trustworthy :&: Is   Accurate)   Ride
-          :|: When (Is   Trustworthy :&: Is Inaccurate) NoRide
-          :|: When (Is Untrustworthy :&: Is   Accurate) NoRide
-          :|: When (Is Untrustworthy :&: Is Inaccurate)   Ride)
-    :*: Case (When (Is   Ride) City
-          :|: When (Is NoRide) Desert)
-    :*: Case (When (Is Trustworthy :&: Is City)   Pay
-          :|: Otherwise                         NoPay)
-    :*: Case (When (Is   Pay :&: Is City) (Box $ Value $    -1000)
-          :|: When (Is NoPay :&: Is City) (Box $ Value $        0)
-          :|: Otherwise                   (Box $ Value $ -1000000))
+    .*. depends (when (is   Trustworthy .&. is   Accurate)   Ride
+             .|. when (is   Trustworthy .&. is Inaccurate) NoRide
+             .|. when (is Untrustworthy .&. is   Accurate) NoRide
+             .|. when (is Untrustworthy .&. is Inaccurate)   Ride)
+    .*. depends (when (is   Ride) City
+             .|. when (is NoRide) Desert)
+    .*. depends (when (is Trustworthy .&. is City)   Pay
+             .|. fallback                          NoPay)
+    .*. depends (when (is   Pay .&. is City) (Value $    -1000)
+             .|. when (is NoPay .&. is City) (Value $        0)
+             .|. fallback                    (Value $ -1000000))
 
   parfitsHitchhikerOf :: ([U.Guard] -> Search -> U.Graph U.Stochastic -> a) -> a
   parfitsHitchhikerOf t = t [] stdSearch parfitsHitchhiker

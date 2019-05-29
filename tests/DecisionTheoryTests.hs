@@ -73,8 +73,6 @@ module DecisionTheoryTests (tests) where
   tests :: IO ()
   tests = hspec $ do
     describe "Probability tests" $ do
-      it "Squash merges probabilities" $ do
-        squash (when (==)) [Probability ("A" :: String) 0.1, Probability "B" 0.4, Probability "A" 0.2, Probability "B" 0.3] `shouldBe` [Probability "A" 0.3, Probability "B" 0.7]
       it "\"Weird\" branches" $ do
         branches weird `shouldBe` weirdBranches
       it "\"Weird\" probabilities for \"c\"" $ do

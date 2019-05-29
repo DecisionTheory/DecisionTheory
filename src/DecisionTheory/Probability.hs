@@ -39,10 +39,6 @@ module DecisionTheory.Probability where
       normalize (Probability a x) = Probability a (x/t)
       t = sum $ map probabilityValue ps
 
-  when :: (a -> a -> Bool) -> (a -> a -> Maybe a)
-  when (==) a1 a2 | a1 == a2  = Just a1
-                  | otherwise = Nothing
-
   squash :: Ord a => (a -> a -> Maybe a) -> Endo [Probability a]
   squash (>+<) = squash' . L.sortOn unProbability
     where squash' (p1:p2:ps) = case merge p1 p2 of
