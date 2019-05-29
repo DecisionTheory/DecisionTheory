@@ -98,7 +98,10 @@ module DecisionTheory.TypedGraph where
   instance (Show o) => Show (Clause UnguardedT o) where
     show (Otherwise o) = "fallback " ++ show o
 
-  when :: E i '[] (Guard g) -> o -> E i '[o] (Clause (GuardedT g) o)
+  class NoCircularity (io :: [*])
+  instance NoCircularity '[]
+
+  when :: NoCircularity (Intersection i '[o]) => E i '[] (Guard g) -> o -> E i '[o] (Clause (GuardedT g) o)
   when (E g) o = E (When g o)
 
   (.|.) :: E i '[o] (Clause c o) -> E j '[o] (Clause d o) -> E (Union i j) '[o] (Clause (DisjunctionT c d) o)
@@ -225,5 +228,8 @@ module DecisionTheory.TypedGraph where
     compile (a :&: b) = compile a ++ compile b
 
 
-  instance Compilable (Graph g) (U.Graph U.Stochastic) => Compilable (E '[] o (Graph g)) (U.Graph U.Stochastic) where
+  class AllInputsSatisfied (i :: [*])
+  instance AllInputsSatisfied '[]
+
+  instance (AllInputsSatisfied i, Compilable (Graph g) (U.Graph U.Stochastic)) => Compilable (E i o (Graph g)) (U.Graph U.Stochastic) where
     compile (E g) = compile g
