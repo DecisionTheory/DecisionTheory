@@ -1,5 +1,6 @@
 {-# LANGUAGE OverloadedStrings, DeriveDataTypeable #-}
 {-# OPTIONS_GHC -fno-warn-missing-signatures #-}
+{- HLINT ignore "Redundant do" -}
 
 module XorBlackmail (tests) where
 
@@ -50,7 +51,7 @@ module XorBlackmail (tests) where
   data Prediction     = Skeptic    | Gullible    deriving (Eq, Show, Typeable, Data)
   data Observation    = Letter     | NoLetter    deriving (Eq, Show, Typeable, Data)
   data Action         = Pay        | Refuse      deriving (Eq, Show, Typeable, Data)
-  data Value          = Value Int                deriving (Eq, Show, Typeable, Data)
+  newtype Value       = Value Int                deriving (Eq, Show, Typeable, Data)
 
   instance {-# OVERLAPS #-} Stateable Value where
     toState (Value n) = State $ show n
@@ -73,7 +74,7 @@ module XorBlackmail (tests) where
     :*: Case (When (Is   Termites :&: Is Pay)    (Value $ -1001000)
           :|: When (Is   Termites :&: Is Refuse) (Value $ -1000000)
           :|: When (Is NoTermites :&: Is Pay)    (Value $    -1000)
-          :|: When (Is NoTermites :&: Is Refuse) (Value $        0))
+          :|: When (Is NoTermites :&: Is Refuse) (Value          0))
 
   xorBlackmailOf :: ([U.Guard] -> Search -> U.Graph U.Stochastic -> a) -> a
   xorBlackmailOf t = t [U.Guard "Observation" "Letter"] stdSearch xorBlackmail
@@ -82,7 +83,7 @@ module XorBlackmail (tests) where
   tests = hspec $ do
     describe "XOR Blackmail" $ do
       it "XOR Blackmail allows one to pay or refuse" $ do
-        (U.choices "Action" $ U.branches xorBlackmail) `shouldBe` ["Pay", "Refuse"]
+        U.choices "Action" (U.branches xorBlackmail) `shouldBe` ["Pay", "Refuse"]
       it "EDT chooses to pay" $ do
         xorBlackmailOf edt `shouldBe` ("Pay", -1000.0)
       it "CDT chooses to refuse" $ do

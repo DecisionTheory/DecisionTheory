@@ -22,20 +22,22 @@ module DecisionTheory.Graph where
   data Clause = Clause [Guard] State
     deriving (Eq, Show)
 
+  clauseValue :: Clause -> State
   clauseValue (Clause _ v) = v
 
   deriving instance Eq (Node a)
   deriving instance Show (Node a)
 
+  {- HLINT ignore Graph -}
   data Graph a = Graph [Labeled (Node a)]
     deriving (Eq, Show)
   unGraph (Graph g) = g
 
   dot :: String -> Graph a -> String
   dot s (Graph lns) = "digraph " ++ s ++ " {\r\n" ++ nodes ++ "}\r\n"
-    where nodes = foldr (++) "" $ map prettyPrint lns
+    where nodes = concatMap prettyPrint lns
           prettyPrint (Labeled (Label l) n) = describe l n ++ "\r\n"
-          describe l (Conditional cs) = foldr (++) "" $ map (\k -> k ++ " -> " ++ l ++ ";\r\n") $ clauses cs
+          describe l (Conditional cs) = concatMap (\k -> k ++ " -> " ++ l ++ ";\r\n") $ clauses cs
           describe l _                = l
           clauses = L.nub . L.sort . concatMap (\(Clause gs _) -> guards gs)
           guards  = L.nub . L.sort . map (\(Guard (Label n) _) -> n)
@@ -44,7 +46,7 @@ module DecisionTheory.Graph where
   find l g@(Graph lns) = resolve =<< getByLabel lns
     where getByLabel :: [Labeled (Node a)] -> Maybe (Node a)
           getByLabel [] = Nothing
-          getByLabel ((Labeled l' n):lns) | l' == l = Just n
+          getByLabel (Labeled l' n : lns) | l' == l = Just n
                                           | otherwise = getByLabel lns
           resolve :: Node Deterministic -> Maybe State
           resolve (Always v) = Just v
@@ -54,7 +56,7 @@ module DecisionTheory.Graph where
           guardMatches (Guard l' v) = find l' g == Just v
 
   probabilities :: Label -> [Probability (Graph Deterministic)] -> [Probability State]
-  probabilities l = squash (when (==)) . M.catMaybes . map find'
+  probabilities l = squash (when (==)) . M.mapMaybe find'
     where find' (Probability g p) = fmap (flip Probability p) (find l g)
           when :: (a -> a -> Bool) -> (a -> a -> Maybe a)
           when (==) a1 a2 | a1 == a2  = Just a1
@@ -67,9 +69,9 @@ module DecisionTheory.Graph where
   branches (Graph ls) = filter ((>0) . snd . unProbability) $ loop ls
     where prepend l = fmap $ \(Graph ls) -> Graph (l:ls)
           loop []                                 = [Probability (Graph []) 1.0]
-          loop ((Labeled l (Always a))       :ls) = map (prepend (Labeled l (Always a)))      $ loop ls
-          loop ((Labeled l (Conditional c))  :ls) = map (prepend (Labeled l (Conditional c))) $ loop ls
-          loop ((Labeled l (Distribution ps)):ls) = [branch l pa pb | pa <- ps, pb <- loop ls]
+          loop (Labeled l (Always a)        : ls) = map (prepend (Labeled l (Always a)))      $ loop ls
+          loop (Labeled l (Conditional c)   : ls) = map (prepend (Labeled l (Conditional c))) $ loop ls
+          loop (Labeled l (Distribution ps) : ls) = [branch l pa pb | pa <- ps, pb <- loop ls]
           branch :: Label -> Probability State -> Endo (Probability (Graph b))
           branch l pa pb = do s <- pa
                               Graph ls' <- pb

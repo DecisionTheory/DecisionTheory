@@ -1,4 +1,6 @@
-{-# LANGUAGE EmptyDataDecls, OverloadedStrings, ViewPatterns #-}
+{-# LANGUAGE OverloadedStrings, ViewPatterns #-}
+{-# OPTIONS_GHC -fno-warn-orphans #-}
+{- HLINT ignore "Redundant do" -}
 
 module DecisionTheoryTests (tests) where
 
@@ -6,6 +8,8 @@ module DecisionTheoryTests (tests) where
   import Test.Hspec.QuickCheck
   import qualified Test.QuickCheck as QC
   import qualified Test.QuickCheck.Function as QCF
+
+  import Control.Monad ((>=>))
 
   import DecisionTheory.Base
   import DecisionTheory.Probability
@@ -55,19 +59,19 @@ module DecisionTheoryTests (tests) where
                    ]
 
   instance QC.Arbitrary a => QC.Arbitrary (Probability a) where
-    arbitrary = do e <- QC.arbitrary
-                   v <- QC.arbitrary
-                   return $ Probability e v
+    arbitrary = Probability <$> QC.arbitrary <*> QC.arbitrary
 
   -- props to https://austinrochford.com/posts/2014-05-27-quickcheck-laws.html
   monadLeftIdProp :: (Monad m, Eq (m b)) => a -> QCF.Fun a (m b) -> Bool
-  monadLeftIdProp x (QCF.apply -> f) = (return x >>= f) == (f x)
+  {- HLINT ignore monadLeftIdProp "Monad law, left identity" -}
+  monadLeftIdProp x (QCF.apply -> f) = (return x >>= f) == f x
 
   monadRightIdProp :: (Monad m, Eq (m a)) => m a -> Bool
+  {- HLINT ignore monadRightIdProp "Monad law, right identity" -}
   monadRightIdProp x = (x >>= return) == x
 
   monadAssocProp :: (Monad m, Eq (m c)) => m a -> QCF.Fun a (m b) -> QCF.Fun b (m c) -> Bool
-  monadAssocProp x (QCF.apply -> f) (QCF.apply -> g) = ((x >>= f) >>= g) == (x >>= (\x' -> f x' >>= g))
+  monadAssocProp x (QCF.apply -> f) (QCF.apply -> g) = ((x >>= f) >>= g) == (x >>= (f >=> g))
 
 
   tests :: IO ()
