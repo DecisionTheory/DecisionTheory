@@ -1,5 +1,6 @@
 {-# LANGUAGE OverloadedStrings, DeriveDataTypeable #-}
 {-# OPTIONS_GHC -fno-warn-missing-signatures #-}
+{- HLINT ignore "Redundant do" -}
 
 module DeathInDamascus (tests) where
 
@@ -45,7 +46,7 @@ module DeathInDamascus (tests) where
   data Death          = Aleppo     | Damascus    deriving (Eq, Show, Typeable, Data)
   data Outcome        = StayAndDie | StayAndLive
                       | FleeAndDie | FleeAndLive deriving (Eq, Show, Typeable, Data)
-  data Value          = Value Int                deriving (Eq, Show, Typeable, Data)
+  newtype Value       = Value Int                deriving (Eq, Show, Typeable, Data)
 
   instance {-# OVERLAPS #-} Stateable Value where
     toState (Value n) = State $ show n
@@ -62,19 +63,19 @@ module DeathInDamascus (tests) where
           :|: When (Is Stay :&: Is Aleppo)   StayAndLive
           :|: When (Is Flee :&: Is Damascus) FleeAndLive
           :|: When (Is Flee :&: Is Aleppo)   FleeAndDie)
-    :*: Case (When (Is StayAndDie)  (Value $    0)
-          :|: When (Is StayAndLive) (Value $ 1000)
-          :|: When (Is FleeAndLive) (Value $  999)
-          :|: When (Is FleeAndDie)  (Value $   -1))
+    :*: Case (When (Is StayAndDie)  (Value     0)
+          :|: When (Is StayAndLive) (Value  1000)
+          :|: When (Is FleeAndLive) (Value   999)
+          :|: When (Is FleeAndDie)  (Value  $ -1))
 
   deathInDamascusOf :: ([U.Guard] -> Search -> U.Graph U.Stochastic -> a) -> a
   deathInDamascusOf t = t [] stdSearch deathInDamascus
 
   tests :: IO ()
-  tests = hspec $ do
+  tests = hspec $
     describe "Death in Damascus" $ do
       it "Death in Damascus allows one to stay or flee" $ do
-        (U.choices "Action" $ U.branches deathInDamascus) `shouldBe` ["Flee", "Stay"]
+        U.choices "Action" (U.branches deathInDamascus) `shouldBe` ["Flee", "Stay"]
       it "EDT chooses to stay" $ do
         deathInDamascusOf edt `shouldBe` ("Stay", 0.0)
       it "CDT's choice alternates between stay and flee" $ do

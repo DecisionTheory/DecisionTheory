@@ -7,14 +7,20 @@ module DecisionTheory.Probability where
   data Probability a = Probability a Rational
     deriving (Eq, Show)
 
+  unProbability :: Probability a -> (a, Rational)
   unProbability (Probability a r) = (a, r)
+
+  probabilityElement :: Probability a -> a
   probabilityElement (Probability a _) = a
-  probabilityValue   (Probability _ r) = r
+
+  probabilityValue :: Probability a -> Rational
+  probabilityValue (Probability _ r) = r
 
   mkProbability :: a -> Rational -> Probability a
   mkProbability a x | x > 0 && x < 1 = Probability a x
                     | otherwise      = error $ "Invalid probability " ++ show x
 
+  (%=) :: a -> Rational -> Probability a
   (%=) = Probability
 
   prior :: Rational -> Probability ()
@@ -29,15 +35,6 @@ module DecisionTheory.Probability where
 
   instance Monad Probability where
     (Probability a x) >>= k = let Probability b y = k a in Probability b (x * y)
-
-  data Distribution a = Distribution_ [Probability a]
-    deriving (Eq, Show)
-
-  mkDistribution :: [Probability a] -> Distribution a
-  mkDistribution ps = Distribution_ $ filter ((>0).probabilityValue) $ map normalize ps
-    where
-      normalize (Probability a x) = Probability a (x/t)
-      t = sum $ map probabilityValue ps
 
   squash :: Ord a => (a -> a -> Maybe a) -> Endo [Probability a]
   squash (>+<) = squash' . L.sortOn unProbability

@@ -1,5 +1,5 @@
-{-# LANGUAGE StandaloneDeriving, DataKinds, TypeFamilies, TypeOperators, FlexibleInstances, FlexibleContexts
-           , MultiParamTypeClasses, FunctionalDependencies, UndecidableInstances, DeriveDataTypeable, GADTs
+{-# LANGUAGE DataKinds, TypeFamilies, TypeOperators, FlexibleInstances, FlexibleContexts
+           , MultiParamTypeClasses, FunctionalDependencies, UndecidableInstances, GADTs
   #-}
 
 module DecisionTheory.TypedGraph where
@@ -33,8 +33,11 @@ module DecisionTheory.TypedGraph where
     Difference '[] bs = '[]
     Difference as (b ': bs) = Difference (Delete b as) bs
 
+  type family Intersection as bs where
+    Intersection as bs = (Difference (Union as bs) (Union (Difference as bs) (Difference bs as)))
 
-
+  class IsEmpty (e :: [*])
+  instance IsEmpty '[]
 
   newtype E (i :: [*]) (o :: [*]) a = E a
 
@@ -95,7 +98,10 @@ module DecisionTheory.TypedGraph where
   instance (Show o) => Show (Clause UnguardedT o) where
     show (Otherwise o) = "fallback " ++ show o
 
-  when :: E i '[] (Guard g) -> o -> E i '[o] (Clause (GuardedT g) o)
+  class NoCircularity (io :: [*])
+  instance NoCircularity '[]
+
+  when :: NoCircularity (Intersection i '[o]) => E i '[] (Guard g) -> o -> E i '[o] (Clause (GuardedT g) o)
   when (E g) o = E (When g o)
 
   (.|.) :: E i '[o] (Clause c o) -> E j '[o] (Clause d o) -> E (Union i j) '[o] (Clause (DisjunctionT c d) o)
@@ -147,7 +153,13 @@ module DecisionTheory.TypedGraph where
   depends :: E i '[o] (Clause c o) -> E i '[o] (Graph (ConditionalT (Clause c o)))
   depends (E c) = E (Case c)
 
-  (.*.) :: E i '[o] (Graph g) -> E j p (Graph h) -> E (Union (Difference i p) (Difference j '[o])) (Union '[o] p)  (Graph (AppendT g h))
+  class NoDuplicatedOutputs (o :: [*])
+  instance NoDuplicatedOutputs '[]
+
+  class OutputShouldPrecedeInput (o :: [*])
+  instance OutputShouldPrecedeInput '[]
+
+  (.*.) :: (NoDuplicatedOutputs (Intersection '[o] p), OutputShouldPrecedeInput (Intersection i p)) => E i '[o] (Graph g) -> E j p (Graph h) -> E (Union i (Difference j '[o])) (Union '[o] p)  (Graph (AppendT g h))
   infixr 3 .*.
   E g .*. E h = E (g :*: h)
 
@@ -173,7 +185,7 @@ module DecisionTheory.TypedGraph where
     nodeValue :: a -> b
 
   instance NodeValue (Graph (DistributionT a)) a where
-    nodeValue (Distribution ps) = probabilityElement $ head $ ps 
+    nodeValue (Distribution ps) = probabilityElement . head $ ps
   instance NodeValue (Graph  (AlwaysT a)) a where
     nodeValue (Always a) = a
   instance NodeValue (Clause c a) a => NodeValue (Graph (ConditionalT (Clause c a))) a where
@@ -216,5 +228,8 @@ module DecisionTheory.TypedGraph where
     compile (a :&: b) = compile a ++ compile b
 
 
-  instance Compilable (Graph g) (U.Graph U.Stochastic) => Compilable (E '[] o (Graph g)) (U.Graph U.Stochastic) where
+  class AllInputsSatisfied (i :: [*])
+  instance AllInputsSatisfied '[]
+
+  instance (AllInputsSatisfied i, Compilable (Graph g) (U.Graph U.Stochastic)) => Compilable (E i o (Graph g)) (U.Graph U.Stochastic) where
     compile (E g) = compile g

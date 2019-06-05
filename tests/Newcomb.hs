@@ -1,5 +1,6 @@
 {-# LANGUAGE OverloadedStrings, DeriveDataTypeable #-}
 {-# OPTIONS_GHC -fno-warn-missing-signatures #-}
+{- HLINT ignore "Redundant do" -}
 
 module Newcomb (tests) where
 
@@ -56,7 +57,7 @@ module Newcomb (tests) where
   data Prediction     = P1       | P2         deriving (Eq, Show, Typeable, Data)
   data BoxB           = Full     | Empty      deriving (Eq, Show, Typeable, Data)
   data Outcome        = F1 | F2  | E1 | E2    deriving (Eq, Show, Typeable, Data)
-  data Value          = Value Int             deriving (Eq, Show, Typeable, Data)
+  newtype Value       = Value Int             deriving (Eq, Show, Typeable, Data)
 
   instance {-# OVERLAPS #-} Stateable Value where
     toState (Value n) = State $ show n
@@ -80,10 +81,10 @@ module Newcomb (tests) where
           :|: When (Is Twobox :&: Is  Full) F2
           :|: When (Is Onebox :&: Is Empty) E1
           :|: When (Is Twobox :&: Is Empty) E2)
-    :*: Case (When (Is F1) (Value $ 1000000)
-          :|: When (Is F2) (Value $ 1001000)
-          :|: When (Is E1) (Value $       0)
-          :|: When (Is E2) (Value $    1000))
+    :*: Case (When (Is F1) (Value 1000000)
+          :|: When (Is F2) (Value 1001000)
+          :|: When (Is E1) (Value       0)
+          :|: When (Is E2) (Value    1000))
 
   newcombOf :: ([U.Guard] -> Search -> U.Graph U.Stochastic -> a) -> a
   newcombOf t = t [] stdSearch newcomb
@@ -106,7 +107,7 @@ module Newcomb (tests) where
   tests = hspec $ do
     describe "Newcomb" $ do
       it "Newcomb allows one to onebox or twobox" $ do
-        (U.choices "Action" $ U.branches newcomb) `shouldBe` ["Onebox", "Twobox"]
+        U.choices "Action" (U.branches newcomb) `shouldBe` ["Onebox", "Twobox"]
       it "EDT chooses to onebox" $ do
         newcombOf edt `shouldBe` ("Onebox", 990000.0)
       it "CDT chooses to twobox" $ do

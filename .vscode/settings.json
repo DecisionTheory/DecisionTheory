@@ -1,5 +1,8 @@
 {
     "files.trimFinalNewlines": true,
     "files.insertFinalNewline": true,
-    "files.trimTrailingWhitespace": true
+    "files.trimTrailingWhitespace": true,
+    "editor.tabSize": 2,
+    "editor.detectIndentation": false,
+    "editor.autoIndent": false
 }

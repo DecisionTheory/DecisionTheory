@@ -1,5 +1,6 @@
 {-# LANGUAGE OverloadedStrings, DeriveDataTypeable #-}
 {-# OPTIONS_GHC -fno-warn-missing-signatures #-}
+{- HLINT ignore "Redundant do" -}
 
 module ParfitsHitchhiker (tests) where
 
@@ -47,12 +48,12 @@ module ParfitsHitchhiker (tests) where
   data Location       = City        | Desert        deriving (Eq, Show, Typeable, Data)
   data Action         = Pay         | NoPay         deriving (Eq, Show, Typeable, Data)
   data Offer          = Ride        | NoRide        deriving (Eq, Show, Typeable, Data)
-  data Value          = Value Int                   deriving (Eq, Show, Typeable, Data)
+  newtype Value       = Value Int                   deriving (Eq, Show, Typeable, Data)
 
   instance {-# OVERLAPS #-} Stateable Value where
     toState (Value n) = State $ show n
 
-  typedParfitsHitchhiker = 
+  typedParfitsHitchhiker =
         distribution [  Trustworthy %= 0.5
                      ,Untrustworthy %= 0.5
                      ]
@@ -68,7 +69,7 @@ module ParfitsHitchhiker (tests) where
     .*. depends (when (is Trustworthy .&. is City)   Pay
              .|. fallback                          NoPay)
     .*. depends (when (is   Pay .&. is City) (Value $    -1000)
-             .|. when (is NoPay .&. is City) (Value $        0)
+             .|. when (is NoPay .&. is City) (Value          0)
              .|. fallback                    (Value $ -1000000))
 
   parfitsHitchhikerOf :: ([U.Guard] -> Search -> U.Graph U.Stochastic -> a) -> a
@@ -78,21 +79,21 @@ module ParfitsHitchhiker (tests) where
   parfitsHitchhikerInTheCityOf t = t [U.Guard "Location" "City"] stdSearch parfitsHitchhiker
 
   tests :: IO ()
-  tests = hspec $ do
+  tests = hspec $
     describe "Parfit's Hitchhiker" $ do
-      it "Parfit's Hitchhiker allows one to pay or no pay" $ do
-        (U.choices "Action" $ U.branches parfitsHitchhiker) `shouldBe` ["NoPay", "Pay"]
-      it "EDT initially chooses to pay" $ do
+      it "Parfit's Hitchhiker allows one to pay or no pay" $
+        U.choices "Action" (U.branches parfitsHitchhiker) `shouldBe` ["NoPay", "Pay"]
+      it "EDT initially chooses to pay" $
         parfitsHitchhikerOf edt `shouldBe` ("Pay", -1000.0)
-      it "EDT later chooses to no pay" $ do
+      it "EDT later chooses to no pay" $
         parfitsHitchhikerInTheCityOf edt `shouldBe` ("NoPay", 0.0)
-      it "CDT initially chooses to no pay" $ do
+      it "CDT initially chooses to no pay" $
         parfitsHitchhikerOf cdt `shouldBe` ("NoPay", -990099.0)
-      it "CDT later still chooses to no pay" $ do
+      it "CDT later still chooses to no pay" $
         parfitsHitchhikerInTheCityOf cdt `shouldBe` ("NoPay", 0.0)
-      it "FDT initially chooses to pay" $ do
+      it "FDT initially chooses to pay" $
         parfitsHitchhikerOf (fdt "Predisposition") `shouldBe` ("Pay", -1000.0)
-      it "FDT later still chooses to pay" $ do
+      it "FDT later still chooses to pay" $
         parfitsHitchhikerInTheCityOf (fdt "Predisposition") `shouldBe` ("Pay", -1000.0)
-      it "Typed graph should compile to the untyped graph" $ do
+      it "Typed graph should compile to the untyped graph" $
         compile typedParfitsHitchhiker `shouldBe` parfitsHitchhiker
