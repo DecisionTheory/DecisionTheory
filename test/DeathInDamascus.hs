@@ -7,6 +7,7 @@ module DeathInDamascus (tests) where
   import Test.Hspec
 
   import Data.Data
+  import Text.Read
 
   import DecisionTheory.Base
   import DecisionTheory.Probability
@@ -48,8 +49,9 @@ module DeathInDamascus (tests) where
                       | FleeAndDie | FleeAndLive deriving (Eq, Show, Typeable, Data)
   newtype Value       = Value Int                deriving (Eq, Show, Typeable, Data)
 
-  instance {-# OVERLAPS #-} Stateable Value where
+  instance {-# OVERLAPPING #-} Stateable Value where
     toState (Value n) = State $ show n
+    ofState (State s) = Value <$> readMaybe s
 
   typedDeathInDamascus =
         Distribution [ Fleer %= 0.5
@@ -79,8 +81,8 @@ module DeathInDamascus (tests) where
       it "EDT chooses to stay" $ do
         deathInDamascusOf edt `shouldBe` ("Stay", 0.0)
       it "CDT's choice alternates between stay and flee" $ do
-        dt intervene [U.Guard "Action" "Stay"] stdSearch deathInDamascus `shouldBe` ("Flee", 999.0)
-        dt intervene [U.Guard "Action" "Flee"] stdSearch deathInDamascus `shouldBe` ("Stay", 1000.0)
+        unstableDT intervene [U.Guard "Action" "Stay"] stdSearch deathInDamascus `shouldBe` ("Flee", 999.0)
+        unstableDT intervene [U.Guard "Action" "Flee"] stdSearch deathInDamascus `shouldBe` ("Stay", 1000.0)
       it "FDT chooses to stay" $ do
         deathInDamascusOf (fdt "Predisposition") `shouldBe` ("Stay", 0.0)
       it "Typed graph should compile to the untyped graph" $ do

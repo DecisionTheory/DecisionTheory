@@ -7,6 +7,7 @@ module Newcomb (tests) where
   import Test.Hspec
 
   import Data.Data
+  import Text.Read
 
   import DecisionTheory.Base
   import DecisionTheory.Probability
@@ -59,8 +60,9 @@ module Newcomb (tests) where
   data Outcome        = F1 | F2  | E1 | E2    deriving (Eq, Show, Typeable, Data)
   newtype Value       = Value Int             deriving (Eq, Show, Typeable, Data)
 
-  instance {-# OVERLAPS #-} Stateable Value where
+  instance {-# OVERLAPPING #-} Stateable Value where
     toState (Value n) = State $ show n
+    ofState (State s) = Value <$> readMaybe s
 
   typedNewcomb =
         Distribution [Oneboxer %= 0.5

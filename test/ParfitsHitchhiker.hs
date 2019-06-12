@@ -2,17 +2,20 @@
 {-# OPTIONS_GHC -fno-warn-missing-signatures #-}
 {- HLINT ignore "Redundant do" -}
 
-module ParfitsHitchhiker (tests) where
+module ParfitsHitchhiker (tests, Action(..), Value(..), Accuracy(..), typedParfitsHitchhiker) where
 
   import Test.Hspec
 
   import Data.Data
+  import Text.Read
+  import System.IO.Unsafe
 
   import DecisionTheory.Base
   import DecisionTheory.Probability
   import qualified DecisionTheory.Graph as U
   import DecisionTheory.TypedGraph
   import DecisionTheory.DecisionTheory
+  import qualified DecisionTheory.TypedDecisionTheory as TDT
 
   parfitsHitchhiker :: U.Graph U.Stochastic
   parfitsHitchhiker = U.Graph [Labeled "Predisposition" predisposition
@@ -50,8 +53,9 @@ module ParfitsHitchhiker (tests) where
   data Offer          = Ride        | NoRide        deriving (Eq, Show, Typeable, Data)
   newtype Value       = Value Int                   deriving (Eq, Show, Typeable, Data)
 
-  instance {-# OVERLAPS #-} Stateable Value where
+  instance {-# OVERLAPPING #-} Stateable Value where
     toState (Value n) = State $ show n
+    ofState (State s) = Value <$> readMaybe s
 
   typedParfitsHitchhiker =
         distribution [  Trustworthy %= 0.5
@@ -97,3 +101,5 @@ module ParfitsHitchhiker (tests) where
         parfitsHitchhikerInTheCityOf (fdt "Predisposition") `shouldBe` ("Pay", -1000.0)
       it "Typed graph should compile to the untyped graph" $
         compile typedParfitsHitchhiker `shouldBe` parfitsHitchhiker
+      it "Whatever" $
+        TDT.edt true (\(Value v) -> fromIntegral v) typedParfitsHitchhiker `shouldBe` (Pay, -1000.0)

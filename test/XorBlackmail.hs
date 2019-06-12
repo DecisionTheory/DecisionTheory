@@ -7,6 +7,7 @@ module XorBlackmail (tests) where
   import Test.Hspec
 
   import Data.Data
+  import Text.Read
 
   import DecisionTheory.Base
   import DecisionTheory.Probability
@@ -53,8 +54,9 @@ module XorBlackmail (tests) where
   data Action         = Pay        | Refuse      deriving (Eq, Show, Typeable, Data)
   newtype Value       = Value Int                deriving (Eq, Show, Typeable, Data)
 
-  instance {-# OVERLAPS #-} Stateable Value where
+  instance {-# OVERLAPPING #-} Stateable Value where
     toState (Value n) = State $ show n
+    ofState (State s) = Value <$> readMaybe s
 
   typedXorBlackmail =
         Distribution [  Termites %= 0.5
