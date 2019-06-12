@@ -3,7 +3,6 @@
 {- HLINT ignore "Redundant do" -}
 
 module Newcomb (tests) where
-
   import Test.Hspec
 
   import Data.Data
@@ -11,46 +10,48 @@ module Newcomb (tests) where
 
   import DecisionTheory.Base
   import DecisionTheory.Probability
-  import qualified DecisionTheory.Graph as U
-  import DecisionTheory.TypedGraph
-  import DecisionTheory.DecisionTheory
+  import qualified DecisionTheory.Graph as UG
+  import qualified DecisionTheory.DecisionTheory as U
+  import qualified DecisionTheory.TypedGraph as TG
+  import qualified DecisionTheory.TypedDecisionTheory as T
+  import DecisionTheory.TypedGraph(distribution, depends, when, is, fallback, (.*.), (.|.), (.&.))
 
-  newcomb :: U.Graph U.Stochastic
-  newcomb = U.Graph [Labeled "Predisposition" predisposition
-                    ,Labeled "Accuracy"       accuracy
-                    ,Labeled "Action"         action
-                    ,Labeled "Prediction"     prediction
-                    ,Labeled "BoxB"           box_b
-                    ,Labeled "Outcome"        outcome
-                    ,Labeled "Value"          value
-                    ]
-    where predisposition = U.Distribution [Probability "Oneboxer" 0.5
-                                          ,Probability "Twoboxer" 0.5
+  untypedNewcomb :: UG.Graph UG.Stochastic
+  untypedNewcomb = UG.Graph [Labeled "Predisposition" predisposition
+                            ,Labeled "Accuracy"       accuracy
+                            ,Labeled "Action"         action
+                            ,Labeled "Prediction"     prediction
+                            ,Labeled "BoxB"           box_b
+                            ,Labeled "Outcome"        outcome
+                            ,Labeled "Value"          value
+                            ]
+    where predisposition = UG.Distribution [Probability "Oneboxer" 0.5
+                                           ,Probability "Twoboxer" 0.5
+                                           ]
+          accuracy       = UG.Distribution [Probability   "Accurate" 0.99
+                                           ,Probability "Inaccurate" 0.01
+                                           ]
+          action         = UG.Conditional [UG.Clause [UG.Guard "Predisposition" "Oneboxer"] "Onebox"
+                                          ,UG.Clause [UG.Guard "Predisposition" "Twoboxer"] "Twobox"
                                           ]
-          accuracy       = U.Distribution [Probability "Accurate"   0.99
-                                          ,Probability "Inaccurate" 0.01
+          prediction     = UG.Conditional [UG.Clause [UG.Guard "Predisposition" "Oneboxer", UG.Guard "Accuracy"   "Accurate"] "P1"
+                                          ,UG.Clause [UG.Guard "Predisposition" "Twoboxer", UG.Guard "Accuracy"   "Accurate"] "P2"
+                                          ,UG.Clause [UG.Guard "Predisposition" "Oneboxer", UG.Guard "Accuracy" "Inaccurate"] "P2"
+                                          ,UG.Clause [UG.Guard "Predisposition" "Twoboxer", UG.Guard "Accuracy" "Inaccurate"] "P1"
                                           ]
-          action         = U.Conditional [U.Clause [U.Guard "Predisposition" "Oneboxer"] "Onebox"
-                                         ,U.Clause [U.Guard "Predisposition" "Twoboxer"] "Twobox"
-                                         ]
-          prediction     = U.Conditional [U.Clause [U.Guard "Predisposition" "Oneboxer", U.Guard "Accuracy" "Accurate"]   "P1"
-                                         ,U.Clause [U.Guard "Predisposition" "Twoboxer", U.Guard "Accuracy" "Accurate"]   "P2"
-                                         ,U.Clause [U.Guard "Predisposition" "Oneboxer", U.Guard "Accuracy" "Inaccurate"] "P2"
-                                         ,U.Clause [U.Guard "Predisposition" "Twoboxer", U.Guard "Accuracy" "Inaccurate"] "P1"
-                                         ]
-          box_b          = U.Conditional [U.Clause [U.Guard "Prediction" "P1"] "Full"
-                                         ,U.Clause [U.Guard "Prediction" "P2"] "Empty"
-                                         ]
-          outcome        = U.Conditional [U.Clause [U.Guard "Action" "Onebox", U.Guard "BoxB" "Full"]  "F1"
-                                         ,U.Clause [U.Guard "Action" "Twobox", U.Guard "BoxB" "Full"]  "F2"
-                                         ,U.Clause [U.Guard "Action" "Onebox", U.Guard "BoxB" "Empty"] "E1"
-                                         ,U.Clause [U.Guard "Action" "Twobox", U.Guard "BoxB" "Empty"] "E2"
-                                         ]
-          value          = U.Conditional [U.Clause [U.Guard "Outcome" "F1"] "1000000"
-                                         ,U.Clause [U.Guard "Outcome" "F2"] "1001000"
-                                         ,U.Clause [U.Guard "Outcome" "E1"]       "0"
-                                         ,U.Clause [U.Guard "Outcome" "E2"]    "1000"
-                                         ]
+          box_b          = UG.Conditional [UG.Clause [UG.Guard "Prediction" "P1"] "Full"
+                                          ,UG.Clause [UG.Guard "Prediction" "P2"] "Empty"
+                                          ]
+          outcome        = UG.Conditional [UG.Clause [UG.Guard "Action" "Onebox", UG.Guard "BoxB" "Full"]  "F1"
+                                          ,UG.Clause [UG.Guard "Action" "Twobox", UG.Guard "BoxB" "Full"]  "F2"
+                                          ,UG.Clause [UG.Guard "Action" "Onebox", UG.Guard "BoxB" "Empty"] "E1"
+                                          ,UG.Clause [UG.Guard "Action" "Twobox", UG.Guard "BoxB" "Empty"] "E2"
+                                          ]
+          value          = UG.Conditional [UG.Clause [UG.Guard "Outcome" "F1"] "1000000"
+                                          ,UG.Clause [UG.Guard "Outcome" "F2"] "1001000"
+                                          ,UG.Clause [UG.Guard "Outcome" "E1"]       "0"
+                                          ,UG.Clause [UG.Guard "Outcome" "E2"]    "1000"
+                                          ]
 
   data Predisposition = Oneboxer | Twoboxer   deriving (Eq, Show, Typeable, Data)
   data Action         = Onebox   | Twobox     deriving (Eq, Show, Typeable, Data)
@@ -60,67 +61,69 @@ module Newcomb (tests) where
   data Outcome        = F1 | F2  | E1 | E2    deriving (Eq, Show, Typeable, Data)
   newtype Value       = Value Int             deriving (Eq, Show, Typeable, Data)
 
-  instance {-# OVERLAPPING #-} Stateable Value where
+  instance {-# OVERLAPPING #-} TG.Stateable Value where
     toState (Value n) = State $ show n
     ofState (State s) = Value <$> readMaybe s
 
-  typedNewcomb =
-        Distribution [Oneboxer %= 0.5
+  utilityFunction :: Value -> U.Utility
+  utilityFunction (Value v) = fromIntegral v
+
+  newcomb =
+        distribution [Oneboxer %= 0.5
                      ,Twoboxer %= 0.5
                      ]
-    :*: Distribution [  Accurate %= 0.99
+    .*. distribution [  Accurate %= 0.99
                      ,Inaccurate %= 0.01
                      ]
-    :*: Case (When (Is Oneboxer) Onebox
-          :|: When (Is Twoboxer) Twobox)
-    :*: Case (When (Is Oneboxer :&: Is   Accurate) P1
-          :|: When (Is Twoboxer :&: Is   Accurate) P2
-          :|: When (Is Oneboxer :&: Is Inaccurate) P2
-          :|: When (Is Twoboxer :&: Is Inaccurate) P1)
-    :*: Case (When (Is P1)  Full
-          :|: When (Is P2) Empty)
-    :*: Case (When (Is Onebox :&: Is  Full) F1
-          :|: When (Is Twobox :&: Is  Full) F2
-          :|: When (Is Onebox :&: Is Empty) E1
-          :|: When (Is Twobox :&: Is Empty) E2)
-    :*: Case (When (Is F1) (Value 1000000)
-          :|: When (Is F2) (Value 1001000)
-          :|: When (Is E1) (Value       0)
-          :|: When (Is E2) (Value    1000))
+    .*. depends (when (is Oneboxer) Onebox
+             .|. when (is Twoboxer) Twobox)
+    .*. depends (when (is Oneboxer .&. is   Accurate) P1
+             .|. when (is Twoboxer .&. is   Accurate) P2
+             .|. when (is Oneboxer .&. is Inaccurate) P2
+             .|. when (is Twoboxer .&. is Inaccurate) P1)
+    .*. depends (when (is P1)  Full
+             .|. when (is P2) Empty)
+    .*. depends (when (is Onebox .&. is  Full) F1
+             .|. when (is Twobox .&. is  Full) F2
+             .|. when (is Onebox .&. is Empty) E1
+             .|. when (is Twobox .&. is Empty) E2)
+    .*. depends (when (is F1) (Value 1000000)
+             .|. when (is F2) (Value 1001000)
+             .|. when (is E1) (Value       0)
+             .|. when (is E2) (Value    1000))
 
-  newcombOf :: ([U.Guard] -> Search -> U.Graph U.Stochastic -> a) -> a
-  newcombOf t = t [] stdSearch newcomb
 
-  unreliableNewcomb :: U.Graph U.Stochastic
-  unreliableNewcomb = U.replaceG unreliability newcomb
-    where unreliability ln@(Labeled l _) | l == "Accuracy" = Labeled l $ U.Distribution [Probability "Accurate"   0.5
-                                                                                        ,Probability "Inaccurate" 0.5
-                                                                                        ]
+  newcombOf t = t TG.true utilityFunction newcomb
+
+  unreliableNewcomb :: UG.Graph UG.Stochastic
+  unreliableNewcomb = UG.replaceG unreliability untypedNewcomb
+    where unreliability ln@(Labeled l _) | l == "Accuracy" = Labeled l $ UG.Distribution [Probability   "Accurate" 0.5
+                                                                                         ,Probability "Inaccurate" 0.5
+                                                                                         ]
                                          | otherwise       = ln
 
-  lessUnreliableNewcomb :: U.Graph U.Stochastic
-  lessUnreliableNewcomb = U.replaceG lesserUnreliability newcomb
-    where lesserUnreliability ln@(Labeled l _) | l == "Accuracy" = Labeled l $ U.Distribution [Probability "Accurate"   0.51
-                                                                                              ,Probability "Inaccurate" 0.49
-                                                                                              ]
+  lessUnreliableNewcomb :: UG.Graph UG.Stochastic
+  lessUnreliableNewcomb = UG.replaceG lesserUnreliability untypedNewcomb
+    where lesserUnreliability ln@(Labeled l _) | l == "Accuracy" = Labeled l $ UG.Distribution [Probability   "Accurate" 0.51
+                                                                                               ,Probability "Inaccurate" 0.49
+                                                                                               ]
                                                | otherwise       = ln
 
   tests :: IO ()
-  tests = hspec $ do
+  tests = hspec $
     describe "Newcomb" $ do
-      it "Newcomb allows one to onebox or twobox" $ do
-        U.choices "Action" (U.branches newcomb) `shouldBe` ["Onebox", "Twobox"]
-      it "EDT chooses to onebox" $ do
-        newcombOf edt `shouldBe` ("Onebox", 990000.0)
-      it "CDT chooses to twobox" $ do
-        newcombOf cdt `shouldBe` ("Twobox", 11000.0)
-      it "FDT chooses to onebox" $ do
-        newcombOf (fdt "Predisposition") `shouldBe` ("Onebox", 990000.0)
-      it "FDT chooses to onebox even with transparency" $ do
-        fdt "Predisposition" [U.Guard "BoxB" "Full"] stdSearch newcomb `shouldBe` ("Onebox", 1000000.0)
-      it "FDT chooses to twobox when Omega prediction is unreliable" $ do
-        fdt "Predisposition" [] stdSearch unreliableNewcomb `shouldBe` ("Twobox",501000.0)
-      it "FDT chooses to onebox when Omega prediction is less unreliable" $ do
-        fdt "Predisposition" [] stdSearch lessUnreliableNewcomb `shouldBe` ("Onebox",510000.0)
-      it "Typed graph should compile to the untyped graph" $ do
-        compile typedNewcomb `shouldBe` newcomb
+      it "Newcomb allows one to onebox or twobox" $
+        UG.choices "Action" (UG.branches untypedNewcomb) `shouldBe` ["Onebox", "Twobox"]
+      it "Typed graph should compile to the untyped graph" $
+        TG.compile newcomb `shouldBe` untypedNewcomb
+      it "EDT chooses to onebox" $ newcombOf  T.edt    `shouldBe` (Onebox, 990000.0)
+      it "CDT chooses to twobox" $ newcombOf  T.cdt    `shouldBe` (Twobox,  11000.0)
+      it "FDT chooses to onebox" $ newcombOf (T.fdt p) `shouldBe` (Onebox, 990000.0)
+      it "FDT chooses to onebox even with transparency" $
+        T.fdt p (is Full) utilityFunction newcomb                   `shouldBe` (Onebox, 1000000.0)
+      it "FDT chooses to twobox when Omega prediction is unreliable" $
+        U.fdt "Predisposition" [] U.stdSearch unreliableNewcomb     `shouldBe` ("Twobox", 501000.0)
+      it "FDT chooses to onebox when Omega prediction is less unreliable" $
+        U.fdt "Predisposition" [] U.stdSearch lessUnreliableNewcomb `shouldBe` ("Onebox", 510000.0)
+    where p :: Proxy Predisposition
+          p = Proxy

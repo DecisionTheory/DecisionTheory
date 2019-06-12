@@ -1,10 +1,10 @@
 cabal-version: 1.12
 
--- This file has been generated from package.yaml by hpack version 0.31.1.
+-- This file has been generated from package.yaml by hpack version 0.31.2.
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: c0c5a36c4c2959a2e34978c8f13eeea3e1814ee62fe7ac9af8589702ac1abf40
+-- hash: a066ef6e55266a7ee3de933e17dfff6b7e15836affe50198b96889a73b629015
 
 name:           DecisionTheory
 version:        0.1.0.0
@@ -30,8 +30,8 @@ library
       DecisionTheory.DecisionTheory
       DecisionTheory.Graph
       DecisionTheory.Probability
-      DecisionTheory.TypedGraph
       DecisionTheory.TypedDecisionTheory
+      DecisionTheory.TypedGraph
   other-modules:
       Paths_DecisionTheory
   hs-source-dirs:

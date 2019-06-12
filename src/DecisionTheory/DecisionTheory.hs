@@ -10,6 +10,7 @@ module DecisionTheory.DecisionTheory where
   import DecisionTheory.Probability
   import DecisionTheory.Graph
 
+  -- FIXME newtype
   type Utility = Float
 
   data Search = Search (State -> Utility) Label Label

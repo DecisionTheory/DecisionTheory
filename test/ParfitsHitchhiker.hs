@@ -2,50 +2,50 @@
 {-# OPTIONS_GHC -fno-warn-missing-signatures #-}
 {- HLINT ignore "Redundant do" -}
 
-module ParfitsHitchhiker (tests, Action(..), Value(..), Accuracy(..), typedParfitsHitchhiker) where
-
+module ParfitsHitchhiker (tests) where
   import Test.Hspec
 
   import Data.Data
   import Text.Read
-  import System.IO.Unsafe
 
   import DecisionTheory.Base
   import DecisionTheory.Probability
-  import qualified DecisionTheory.Graph as U
-  import DecisionTheory.TypedGraph
-  import DecisionTheory.DecisionTheory
-  import qualified DecisionTheory.TypedDecisionTheory as TDT
+  import qualified DecisionTheory.Graph as UG
+  import qualified DecisionTheory.DecisionTheory as U
+  import qualified DecisionTheory.TypedGraph as TG
+  import qualified DecisionTheory.TypedDecisionTheory as T
+  import DecisionTheory.TypedGraph(distribution, depends, when, is, fallback, (.*.), (.|.), (.&.))
 
-  parfitsHitchhiker :: U.Graph U.Stochastic
-  parfitsHitchhiker = U.Graph [Labeled "Predisposition" predisposition
-                              ,Labeled "Accuracy"       accuracy
-                              ,Labeled "Offer"          offer
-                              ,Labeled "Location"       location
-                              ,Labeled "Action"         action
-                              ,Labeled "Value"          value
-                              ]
-    where predisposition = U.Distribution [Probability "Trustworthy" 0.5
-                                          ,Probability "Untrustworthy" 0.5
+  untypedParfitsHitchhiker :: UG.Graph UG.Stochastic
+  untypedParfitsHitchhiker = UG.Graph [Labeled "Predisposition" predisposition
+                                      ,Labeled "Accuracy"       accuracy
+                                      ,Labeled "Offer"          offer
+                                      ,Labeled "Location"       location
+                                      ,Labeled "Action"         action
+                                      ,Labeled "Value"          value
+                                      ]
+    where predisposition = UG.Distribution [Probability "Trustworthy"   0.5
+                                           ,Probability "Untrustworthy" 0.5
+                                           ]
+          accuracy       = UG.Distribution [Probability "Accurate"   0.99
+                                           ,Probability "Inaccurate" 0.01
+                                           ]
+          offer          = UG.Conditional [UG.Clause [UG.Guard "Predisposition" "Trustworthy",   UG.Guard "Accuracy"   "Accurate"]   "Ride"
+                                          ,UG.Clause [UG.Guard "Predisposition" "Trustworthy",   UG.Guard "Accuracy" "Inaccurate"] "NoRide"
+                                          ,UG.Clause [UG.Guard "Predisposition" "Untrustworthy", UG.Guard "Accuracy"   "Accurate"] "NoRide"
+                                          ,UG.Clause [UG.Guard "Predisposition" "Untrustworthy", UG.Guard "Accuracy" "Inaccurate"]   "Ride"
                                           ]
-          accuracy       = U.Distribution [Probability "Accurate"   0.99
-                                          ,Probability "Inaccurate" 0.01
+          location       = UG.Conditional [UG.Clause [UG.Guard "Offer"   "Ride"] "City"
+                                          ,UG.Clause [UG.Guard "Offer" "NoRide"] "Desert"
                                           ]
-          offer          = U.Conditional [U.Clause [U.Guard "Predisposition" "Trustworthy",   U.Guard "Accuracy" "Accurate"]   "Ride"
-                                         ,U.Clause [U.Guard "Predisposition" "Trustworthy",   U.Guard "Accuracy" "Inaccurate"] "NoRide"
-                                         ,U.Clause [U.Guard "Predisposition" "Untrustworthy", U.Guard "Accuracy" "Accurate"]   "NoRide"
-                                         ,U.Clause [U.Guard "Predisposition" "Untrustworthy", U.Guard "Accuracy" "Inaccurate"] "Ride"
-                                         ]
-          location       = U.Conditional [U.Clause [U.Guard "Offer" "Ride"]   "City"
-                                         ,U.Clause [U.Guard "Offer" "NoRide"] "Desert"
-                                         ]
-          action         = U.Conditional [U.Clause [U.Guard "Predisposition" "Trustworthy", U.Guard "Location" "City"] "Pay"
-                                         ,U.Clause [] "NoPay"
-                                         ]
-          value          = U.Conditional [U.Clause [U.Guard "Action" "Pay",   U.Guard "Location" "City"] "-1000"
-                                         ,U.Clause [U.Guard "Action" "NoPay", U.Guard "Location" "City"] "0"
-                                         ,U.Clause []                                                    "-1000000"
-                                         ]
+          action         = UG.Conditional [UG.Clause [UG.Guard "Predisposition" "Trustworthy", UG.Guard "Location" "City"] "Pay"
+                                          ,UG.Clause [] "NoPay"
+                                          ]
+          value          = UG.Conditional [UG.Clause [UG.Guard "Action"   "Pay", UG.Guard "Location" "City"]    "-1000"
+                                          ,UG.Clause [UG.Guard "Action" "NoPay", UG.Guard "Location" "City"]        "0"
+                                          ,UG.Clause []                                                      "-1000000"
+                                          ]
+
   data Predisposition = Trustworthy | Untrustworthy deriving (Eq, Show, Typeable, Data)
   data Accuracy       = Accurate    | Inaccurate    deriving (Eq, Show, Typeable, Data)
   data Location       = City        | Desert        deriving (Eq, Show, Typeable, Data)
@@ -53,11 +53,14 @@ module ParfitsHitchhiker (tests, Action(..), Value(..), Accuracy(..), typedParfi
   data Offer          = Ride        | NoRide        deriving (Eq, Show, Typeable, Data)
   newtype Value       = Value Int                   deriving (Eq, Show, Typeable, Data)
 
-  instance {-# OVERLAPPING #-} Stateable Value where
+  instance {-# OVERLAPPING #-} TG.Stateable Value where
     toState (Value n) = State $ show n
     ofState (State s) = Value <$> readMaybe s
 
-  typedParfitsHitchhiker =
+  utilityFunction :: Value -> U.Utility
+  utilityFunction (Value v) = fromIntegral v
+
+  parfitsHitchhiker =
         distribution [  Trustworthy %= 0.5
                      ,Untrustworthy %= 0.5
                      ]
@@ -76,30 +79,22 @@ module ParfitsHitchhiker (tests, Action(..), Value(..), Accuracy(..), typedParfi
              .|. when (is NoPay .&. is City) (Value          0)
              .|. fallback                    (Value $ -1000000))
 
-  parfitsHitchhikerOf :: ([U.Guard] -> Search -> U.Graph U.Stochastic -> a) -> a
-  parfitsHitchhikerOf t = t [] stdSearch parfitsHitchhiker
+  parfitsHitchhikerOf t = t TG.true utilityFunction parfitsHitchhiker
 
-  parfitsHitchhikerInTheCityOf :: ([U.Guard] -> Search -> U.Graph U.Stochastic -> a) -> a
-  parfitsHitchhikerInTheCityOf t = t [U.Guard "Location" "City"] stdSearch parfitsHitchhiker
+  parfitsHitchhikerInTheCityOf t = t (is City) utilityFunction parfitsHitchhiker
 
   tests :: IO ()
   tests = hspec $
     describe "Parfit's Hitchhiker" $ do
       it "Parfit's Hitchhiker allows one to pay or no pay" $
-        U.choices "Action" (U.branches parfitsHitchhiker) `shouldBe` ["NoPay", "Pay"]
-      it "EDT initially chooses to pay" $
-        parfitsHitchhikerOf edt `shouldBe` ("Pay", -1000.0)
-      it "EDT later chooses to no pay" $
-        parfitsHitchhikerInTheCityOf edt `shouldBe` ("NoPay", 0.0)
-      it "CDT initially chooses to no pay" $
-        parfitsHitchhikerOf cdt `shouldBe` ("NoPay", -990099.0)
-      it "CDT later still chooses to no pay" $
-        parfitsHitchhikerInTheCityOf cdt `shouldBe` ("NoPay", 0.0)
-      it "FDT initially chooses to pay" $
-        parfitsHitchhikerOf (fdt "Predisposition") `shouldBe` ("Pay", -1000.0)
-      it "FDT later still chooses to pay" $
-        parfitsHitchhikerInTheCityOf (fdt "Predisposition") `shouldBe` ("Pay", -1000.0)
+        UG.choices "Action" (UG.branches untypedParfitsHitchhiker) `shouldBe` ["NoPay", "Pay"]
       it "Typed graph should compile to the untyped graph" $
-        compile typedParfitsHitchhiker `shouldBe` parfitsHitchhiker
-      it "Whatever" $
-        TDT.edt true (\(Value v) -> fromIntegral v) typedParfitsHitchhiker `shouldBe` (Pay, -1000.0)
+        TG.compile parfitsHitchhiker `shouldBe` untypedParfitsHitchhiker
+      it "EDT initially chooses to pay"      $ parfitsHitchhikerOf           T.edt    `shouldBe` (  Pay,   -1000.0)
+      it "EDT later chooses to no pay"       $ parfitsHitchhikerInTheCityOf  T.edt    `shouldBe` (NoPay,       0.0)
+      it "CDT initially chooses to no pay"   $ parfitsHitchhikerOf           T.cdt    `shouldBe` (NoPay, -990099.0)
+      it "CDT later still chooses to no pay" $ parfitsHitchhikerInTheCityOf  T.cdt    `shouldBe` (NoPay,       0.0)
+      it "FDT initially chooses to pay"      $ parfitsHitchhikerOf          (T.fdt p) `shouldBe` (  Pay,   -1000.0)
+      it "FDT later still chooses to pay"    $ parfitsHitchhikerInTheCityOf (T.fdt p) `shouldBe` (  Pay,   -1000.0)
+    where p :: Proxy Predisposition
+          p = Proxy

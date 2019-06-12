@@ -201,7 +201,13 @@ module DecisionTheory.TypedGraph where
     toLabel :: a -> Label
 
   instance {-# OVERLAPPABLE #-} Typeable a => Labelable a where
-    toLabel = Label . tyConName . typeRepTyCon . typeOf
+    toLabel = typeToLabel . typeOf
+
+  instance Typeable a => Labelable (Proxy a) where
+    toLabel = typeToLabel . typeRep
+
+  typeToLabel :: TypeRep -> Label
+  typeToLabel = Label . tyConName . typeRepTyCon
 
 
 
