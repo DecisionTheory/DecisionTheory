@@ -1,5 +1,6 @@
 {-# LANGUAGE DataKinds, TypeFamilies, TypeOperators, FlexibleInstances, FlexibleContexts
            , MultiParamTypeClasses, FunctionalDependencies, UndecidableInstances, GADTs
+           , ScopedTypeVariables
   #-}
 
 module DecisionTheory.TypedGraph where
@@ -49,29 +50,50 @@ module DecisionTheory.TypedGraph where
 
 
 
+  data TrueT
   data IsT a
   data AndT a b
 
   data Guard :: * -> * where
-    Is  :: a -> Guard (IsT a)
+    GTrue :: Guard TrueT
+    Is :: a -> Guard (IsT a)
     (:&:) :: Guard a -> Guard b -> Guard (AndT a b)
   infixr 7 :&:
 
+  instance Eq (Guard TrueT) where
+    _ == _  = True
   instance Eq a => Eq (Guard (IsT a)) where
     Is a    == Is b    = a == b
   instance (Eq (Guard a), Eq (Guard b)) => Eq (Guard (AndT a b)) where
     (a :&: b) == (c :&: d) = a == c && b == d
+  instance Show (Guard TrueT) where
+    show (GTrue) = "true"
   instance Show a => Show (Guard (IsT a)) where
     show (Is a) = show a
   instance (Show (Guard a), Show (Guard b)) => Show (Guard (AndT a b)) where
     show (a :&: b) = show a ++ " .&. " ++ show b
 
+  true :: E '[] '[] (Guard TrueT)
+  true = E GTrue
+
   is :: a -> E '[a] '[] (Guard (IsT a))
   is a = E (Is a)
 
-  (.&.) :: E ia '[] (Guard a) -> E ib '[] (Guard b) -> E (Union ia ib) '[] (Guard (AndT a b))
+  class And a b c | a b -> c where
+    (.&.) :: E ia '[] (Guard a) -> E ib '[] (Guard b) -> E (Union ia ib) '[] (Guard c)
   infixr 7 .&.
-  (E a) .&. (E b) = E (a :&: b)
+
+  instance And TrueT b b where
+    (E GTrue) .&. (E b) = E b
+
+  instance And a TrueT a where
+    (E a) .&. (E GTrue) = E a
+
+  instance And (IsT a) (IsT b) (AndT (IsT a) (IsT b)) where
+    (E a) .&. (E b) = E (a :&: b)
+
+  instance And (IsT a) (AndT b c) (AndT (IsT a) (AndT b c)) where
+    (E a) .&. (E b) = E (a :&: b)
 
 
 
@@ -168,15 +190,24 @@ module DecisionTheory.TypedGraph where
 
   class Stateable a where
     toState :: a -> State
+    ofState :: State -> Maybe a
 
-  instance Data a => Stateable a where
+
+  instance {-# OVERLAPPABLE #-} forall a. Data a => Stateable a where
     toState = State . showConstr . toConstr
+    ofState (State s) = (fromConstr <$> readConstr (dataTypeOf (undefined :: a)) s)
 
   class Labelable a where
     toLabel :: a -> Label
 
-  instance Typeable a => Labelable a where
-    toLabel = Label . tyConName . typeRepTyCon . typeOf
+  instance {-# OVERLAPPABLE #-} Typeable a => Labelable a where
+    toLabel = typeToLabel . typeOf
+
+  instance Typeable a => Labelable (Proxy a) where
+    toLabel = typeToLabel . typeRep
+
+  typeToLabel :: TypeRep -> Label
+  typeToLabel = Label . tyConName . typeRepTyCon
 
 
 
@@ -222,6 +253,8 @@ module DecisionTheory.TypedGraph where
   instance (Compilable (Guard g) [U.Guard], Stateable v) => Compilable (Clause (GuardedT g) v) [U.Clause] where
     compile (When a v) = [U.Clause (compile a) (toState v)]
 
+  instance Compilable (Guard TrueT) [U.Guard] where
+    compile (GTrue) = []
   instance (Labelable a, Stateable a) => Compilable (Guard (IsT a)) [U.Guard] where
     compile (Is a) = [U.Guard (toLabel a) (toState a)]
   instance (Compilable (Guard a) [U.Guard], Compilable (Guard b) [U.Guard]) => Compilable (Guard (AndT a b)) [U.Guard] where
@@ -232,4 +265,7 @@ module DecisionTheory.TypedGraph where
   instance AllInputsSatisfied '[]
 
   instance (AllInputsSatisfied i, Compilable (Graph g) (U.Graph U.Stochastic)) => Compilable (E i o (Graph g)) (U.Graph U.Stochastic) where
+    compile (E g) = compile g
+
+  instance (Compilable (Guard g) [U.Guard]) => Compilable (E i o (Guard g)) [U.Guard] where
     compile (E g) = compile g

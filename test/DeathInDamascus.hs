@@ -3,43 +3,45 @@
 {- HLINT ignore "Redundant do" -}
 
 module DeathInDamascus (tests) where
-
   import Test.Hspec
 
   import Data.Data
+  import Text.Read
 
   import DecisionTheory.Base
   import DecisionTheory.Probability
-  import qualified DecisionTheory.Graph as U
-  import DecisionTheory.TypedGraph
-  import DecisionTheory.DecisionTheory
+  import qualified DecisionTheory.Graph as UG
+  import qualified DecisionTheory.DecisionTheory as U
+  import qualified DecisionTheory.TypedGraph as TG
+  import qualified DecisionTheory.TypedDecisionTheory as T
+  import DecisionTheory.TypedGraph(distribution, depends, when, is, fallback, (.*.), (.|.), (.&.))
 
-  deathInDamascus :: U.Graph U.Stochastic
-  deathInDamascus = U.Graph [Labeled "Predisposition" predisposition
-                            ,Labeled "Action"         action
-                            ,Labeled "Death"          death
-                            ,Labeled "Outcome"        outcome
-                            ,Labeled "Value"          value
-                            ]
-    where predisposition = U.Distribution [Probability "Fleer"  0.5
-                                          ,Probability "Stayer" 0.5
+  untypedDeathInDamascus :: UG.Graph UG.Stochastic
+  untypedDeathInDamascus = UG.Graph [Labeled "Predisposition" predisposition
+                                    ,Labeled "Action"         action
+                                    ,Labeled "Death"          death
+                                    ,Labeled "Outcome"        outcome
+                                    ,Labeled "Value"          value
+                                    ]
+    where predisposition = UG.Distribution [Probability "Fleer"  0.5
+                                           ,Probability "Stayer" 0.5
+                                           ]
+          action         = UG.Conditional [UG.Clause [UG.Guard "Predisposition" "Fleer"]  "Flee"
+                                          ,UG.Clause [UG.Guard "Predisposition" "Stayer"] "Stay"
                                           ]
-          action         = U.Conditional [U.Clause [U.Guard "Predisposition" "Fleer"]  "Flee"
-                                         ,U.Clause [U.Guard "Predisposition" "Stayer"] "Stay"
-                                         ]
-          death          = U.Conditional [U.Clause [U.Guard "Predisposition" "Fleer"]  "Aleppo"
-                                         ,U.Clause [U.Guard "Predisposition" "Stayer"] "Damascus"
-                                         ]
-          outcome        = U.Conditional [U.Clause [U.Guard "Action" "Stay", U.Guard "Death" "Damascus"] "StayAndDie"
-                                         ,U.Clause [U.Guard "Action" "Stay", U.Guard "Death" "Aleppo"  ] "StayAndLive"
-                                         ,U.Clause [U.Guard "Action" "Flee", U.Guard "Death" "Damascus"] "FleeAndLive"
-                                         ,U.Clause [U.Guard "Action" "Flee", U.Guard "Death" "Aleppo"  ] "FleeAndDie"
-                                         ]
-          value          = U.Conditional [U.Clause [U.Guard "Outcome" "StayAndDie" ]    "0"
-                                         ,U.Clause [U.Guard "Outcome" "StayAndLive"] "1000"
-                                         ,U.Clause [U.Guard "Outcome" "FleeAndLive"]  "999"
-                                         ,U.Clause [U.Guard "Outcome" "FleeAndDie" ]   "-1"
-                                         ]
+          death          = UG.Conditional [UG.Clause [UG.Guard "Predisposition" "Fleer"]  "Aleppo"
+                                          ,UG.Clause [UG.Guard "Predisposition" "Stayer"] "Damascus"
+                                          ]
+          outcome        = UG.Conditional [UG.Clause [UG.Guard "Action" "Stay", UG.Guard "Death" "Damascus"] "StayAndDie"
+                                          ,UG.Clause [UG.Guard "Action" "Stay", UG.Guard "Death" "Aleppo"  ] "StayAndLive"
+                                          ,UG.Clause [UG.Guard "Action" "Flee", UG.Guard "Death" "Damascus"] "FleeAndLive"
+                                          ,UG.Clause [UG.Guard "Action" "Flee", UG.Guard "Death" "Aleppo"  ] "FleeAndDie"
+                                          ]
+          value          = UG.Conditional [UG.Clause [UG.Guard "Outcome" "StayAndDie" ]    "0"
+                                          ,UG.Clause [UG.Guard "Outcome" "StayAndLive"] "1000"
+                                          ,UG.Clause [UG.Guard "Outcome" "FleeAndLive"]  "999"
+                                          ,UG.Clause [UG.Guard "Outcome" "FleeAndDie" ]   "-1"
+                                          ]
 
   data Predisposition = Fleer      | Stayer      deriving (Eq, Show, Typeable, Data)
   data Action         = Flee       | Stay        deriving (Eq, Show, Typeable, Data)
@@ -48,40 +50,43 @@ module DeathInDamascus (tests) where
                       | FleeAndDie | FleeAndLive deriving (Eq, Show, Typeable, Data)
   newtype Value       = Value Int                deriving (Eq, Show, Typeable, Data)
 
-  instance {-# OVERLAPS #-} Stateable Value where
+  instance {-# OVERLAPPING #-} TG.Stateable Value where
     toState (Value n) = State $ show n
+    ofState (State s) = Value <$> readMaybe s
 
-  typedDeathInDamascus =
-        Distribution [ Fleer %= 0.5
+  utilityFunction :: Value -> U.Utility
+  utilityFunction (Value v) = fromIntegral v
+
+  deathInDamascus =
+        distribution [ Fleer %= 0.5
                      ,Stayer %= 0.5
                      ]
-    :*: Case (When (Is Fleer)  Flee
-          :|: When (Is Stayer) Stay)
-    :*: Case (When (Is Fleer)  Aleppo
-          :|: When (Is Stayer) Damascus)
-    :*: Case (When (Is Stay :&: Is Damascus) StayAndDie
-          :|: When (Is Stay :&: Is Aleppo)   StayAndLive
-          :|: When (Is Flee :&: Is Damascus) FleeAndLive
-          :|: When (Is Flee :&: Is Aleppo)   FleeAndDie)
-    :*: Case (When (Is StayAndDie)  (Value     0)
-          :|: When (Is StayAndLive) (Value  1000)
-          :|: When (Is FleeAndLive) (Value   999)
-          :|: When (Is FleeAndDie)  (Value  $ -1))
+    .*. depends (when (is Fleer)  Flee
+             .|. when (is Stayer) Stay)
+    .*. depends (when (is Fleer)  Aleppo
+             .|. when (is Stayer) Damascus)
+    .*. depends (when (is Stay .&. is Damascus) StayAndDie
+             .|. when (is Stay .&. is Aleppo)   StayAndLive
+             .|. when (is Flee .&. is Damascus) FleeAndLive
+             .|. when (is Flee .&. is Aleppo)   FleeAndDie)
+    .*. depends (when (is StayAndDie)  (Value     0)
+             .|. when (is StayAndLive) (Value  1000)
+             .|. when (is FleeAndLive) (Value   999)
+             .|. when (is FleeAndDie)  (Value  $ -1))
 
-  deathInDamascusOf :: ([U.Guard] -> Search -> U.Graph U.Stochastic -> a) -> a
-  deathInDamascusOf t = t [] stdSearch deathInDamascus
+  deathInDamascusOf t = t TG.true utilityFunction deathInDamascus
 
   tests :: IO ()
   tests = hspec $
     describe "Death in Damascus" $ do
-      it "Death in Damascus allows one to stay or flee" $ do
-        U.choices "Action" (U.branches deathInDamascus) `shouldBe` ["Flee", "Stay"]
-      it "EDT chooses to stay" $ do
-        deathInDamascusOf edt `shouldBe` ("Stay", 0.0)
+      it "Death in Damascus allows one to stay or flee" $
+        UG.choices "Action" (UG.branches untypedDeathInDamascus) `shouldBe` ["Flee", "Stay"]
+      it "Typed graph should compile to the untyped graph" $
+        TG.compile deathInDamascus `shouldBe` untypedDeathInDamascus
       it "CDT's choice alternates between stay and flee" $ do
-        dt intervene [U.Guard "Action" "Stay"] stdSearch deathInDamascus `shouldBe` ("Flee", 999.0)
-        dt intervene [U.Guard "Action" "Flee"] stdSearch deathInDamascus `shouldBe` ("Stay", 1000.0)
-      it "FDT chooses to stay" $ do
-        deathInDamascusOf (fdt "Predisposition") `shouldBe` ("Stay", 0.0)
-      it "Typed graph should compile to the untyped graph" $ do
-        compile typedDeathInDamascus `shouldBe` deathInDamascus
+        U.unstableDT U.intervene [UG.Guard "Action" "Stay"] U.stdSearch untypedDeathInDamascus `shouldBe` ("Flee", 999.0)
+        U.unstableDT U.intervene [UG.Guard "Action" "Flee"] U.stdSearch untypedDeathInDamascus `shouldBe` ("Stay", 1000.0)
+      it "EDT chooses to stay" $ deathInDamascusOf  T.edt    `shouldBe` (Stay, 0.0)
+      it "FDT chooses to stay" $ deathInDamascusOf (T.fdt p) `shouldBe` (Stay, 0.0)
+    where p :: Proxy Predisposition
+          p = Proxy

@@ -10,6 +10,7 @@ module DecisionTheory.DecisionTheory where
   import DecisionTheory.Probability
   import DecisionTheory.Graph
 
+  -- FIXME newtype
   type Utility = Float
 
   data Search = Search (State -> Utility) Label Label
@@ -17,8 +18,10 @@ module DecisionTheory.DecisionTheory where
   stdSearch = Search uf (Label "Action") (Label "Value")
     where uf (State s) = read s
 
-  dt :: Foldable t => (Guard -> Endo [Probability (Graph Deterministic)]) -> t Guard -> Search -> Graph Stochastic -> (State, Utility)
-  dt hypothesis gs (Search uf a o) g = L.maximumBy (comparing snd) . map expectation $ hypotheticals
+  type Hypothesis = (Guard -> Endo [Probability (Graph Deterministic)])
+
+  unstableDT :: Foldable t => Hypothesis -> t Guard -> Search -> Graph Stochastic -> (State, Utility)
+  unstableDT hypothesis gs (Search uf a o) g = L.maximumBy (comparing snd) . map expectation $ hypotheticals
     where hypotheticals :: [(State, [Probability (Graph Deterministic)])]
           hypotheticals = M.mapMaybe (hypothetical.conclusion) $ choices a $ branches g
           hypothetical (_, []) = Nothing
@@ -30,28 +33,28 @@ module DecisionTheory.DecisionTheory where
           expectation :: (State, [Probability (Graph Deterministic)]) -> (State, Utility)
           expectation (v, ps) = (v, sum $ map expectedValue ps)
 
-  stableDT :: Foldable t => (Guard -> Endo [Probability (Graph Deterministic)]) -> t Guard -> Search -> Graph Stochastic -> (State, Utility)
-  stableDT hypothesis gs s@(Search _ a _) g | fst decision == fst dominance = decision
-                                            | otherwise                     = error ("OMG! " ++ show dominance ++ " /= " ++ show decision)
+  dt :: Foldable t => Hypothesis -> t Guard -> Search -> Graph Stochastic -> (State, Utility)
+  dt hypothesis gs s@(Search _ a _) g | fst decision == fst dominance = decision
+                                      | otherwise                     = error ("OMG! " ++ show dominance ++ " /= " ++ show decision)
     where decision :: (State, Utility)
-          decision = dt hypothesis (Guard a (fst dominance) : toList gs) s g
+          decision = unstableDT hypothesis (Guard a (fst dominance) : toList gs) s g
           dominance :: (State, Utility)
-          dominance = dt hypothesis gs s g
+          dominance = unstableDT hypothesis gs s g
 
   edt :: Foldable t => t Guard -> Search -> Graph Stochastic -> (State, Utility)
-  edt = stableDT condition
+  edt = dt condition
 
   cdt :: [Guard] -> Search -> Graph Stochastic -> (State, Utility)
-  cdt = stableDT intervene
+  cdt = dt intervene
 
   fdt :: Foldable t => Label -> t Guard -> Search -> Graph Stochastic -> (State, Utility)
-  fdt = stableDT . counterFactualize
+  fdt = dt . counterFactualize
 
-  condition :: Guard -> Endo [Probability (Graph Deterministic)]
+  condition :: Hypothesis
   condition (Guard l v) = normalize . filter branchSatisfiesGuard
     where branchSatisfiesGuard (Probability g _) = Just v == find l g
 
-  intervene :: Guard -> Endo [Probability (Graph Deterministic)]
+  intervene :: Hypothesis
   intervene (Guard l v) = normalize . map (mapBranches intervention)
     where intervention :: Endo (Labeled (Node Deterministic))
           intervention ln@(Labeled l' _) | l == l'   = Labeled l (Always v)
@@ -62,5 +65,5 @@ module DecisionTheory.DecisionTheory where
       for each possible intervention on predisposition, and finally condition that distribution on the
       choice of action we're evaluating.
    --}
-  counterFactualize :: Label -> Guard -> Endo [Probability (Graph Deterministic)]
+  counterFactualize :: Label -> Hypothesis
   counterFactualize l g ps = condition g $ normalize $ concatMap (\s -> intervene (Guard l s) ps) $ choices l ps

@@ -3,48 +3,49 @@
 {- HLINT ignore "Redundant do" -}
 
 module XorBlackmail (tests) where
-
   import Test.Hspec
 
   import Data.Data
+  import Text.Read
 
   import DecisionTheory.Base
   import DecisionTheory.Probability
-  import qualified DecisionTheory.Graph as U
-  import DecisionTheory.TypedGraph
-  import DecisionTheory.DecisionTheory
+  import qualified DecisionTheory.Graph as UG
+  import qualified DecisionTheory.DecisionTheory as U
+  import qualified DecisionTheory.TypedGraph as TG
+  import qualified DecisionTheory.TypedDecisionTheory as T
+  import DecisionTheory.TypedGraph(distribution, depends, when, is, fallback, (.*.), (.|.), (.&.))
 
-  xorBlackmail :: U.Graph U.Stochastic
-  xorBlackmail = U.Graph [Labeled "Infestation"    infestation
-                         ,Labeled "Predisposition" predisposition
-                         ,Labeled "Prediction"     prediction
-                         ,Labeled "Observation"    observation
-                         ,Labeled "Action"         action
-                         ,Labeled "Value"          value
-                         ]
-    where infestation    = U.Distribution [Probability   "Termites" 0.5
-                                          ,Probability "NoTermites" 0.5
+  untypedXorBlackmail :: UG.Graph UG.Stochastic
+  untypedXorBlackmail = UG.Graph [Labeled "Infestation"    infestation
+                                 ,Labeled "Predisposition" predisposition
+                                 ,Labeled "Prediction"     prediction
+                                 ,Labeled "Observation"    observation
+                                 ,Labeled "Action"         action
+                                 ,Labeled "Value"          value
+                                 ]
+    where infestation    = UG.Distribution [Probability   "Termites" 0.5
+                                           ,Probability "NoTermites" 0.5
+                                           ]
+          predisposition = UG.Distribution [Probability   "Payer" 0.5
+                                           ,Probability "Refuser" 0.5
+                                           ]
+          prediction     = UG.Conditional [UG.Clause [UG.Guard "Infestation" "Termites",   UG.Guard "Predisposition"   "Payer"]  "Skeptic"
+                                          ,UG.Clause [UG.Guard "Infestation" "Termites",   UG.Guard "Predisposition" "Refuser"] "Gullible"
+                                          ,UG.Clause [UG.Guard "Infestation" "NoTermites", UG.Guard "Predisposition"   "Payer"] "Gullible"
+                                          ,UG.Clause [UG.Guard "Infestation" "NoTermites", UG.Guard "Predisposition" "Refuser"]  "Skeptic"
                                           ]
-          predisposition = U.Distribution [Probability   "Payer" 0.5
-                                          ,Probability "Refuser" 0.5
+          observation    = UG.Conditional [UG.Clause [UG.Guard "Prediction" "Gullible"] "Letter"
+                                          ,UG.Clause [UG.Guard "Prediction"  "Skeptic"] "NoLetter"
                                           ]
-          prediction     = U.Conditional [U.Clause [U.Guard "Infestation" "Termites",   U.Guard "Predisposition"   "Payer"]  "Skeptic"
-                                         ,U.Clause [U.Guard "Infestation" "Termites",   U.Guard "Predisposition" "Refuser"] "Gullible"
-                                         ,U.Clause [U.Guard "Infestation" "NoTermites", U.Guard "Predisposition"   "Payer"] "Gullible"
-                                         ,U.Clause [U.Guard "Infestation" "NoTermites", U.Guard "Predisposition" "Refuser"]  "Skeptic"
-                                         ]
-          observation    = U.Conditional [U.Clause [U.Guard "Prediction" "Gullible"] "Letter"
-                                         ,U.Clause [U.Guard "Prediction"  "Skeptic"] "NoLetter"
-                                         ]
-          action         = U.Conditional [U.Clause [U.Guard "Predisposition"   "Payer"]   "Pay"
-                                         ,U.Clause [U.Guard "Predisposition" "Refuser"] "Refuse"
-                                         ]
-          value          = U.Conditional [U.Clause [U.Guard "Infestation"   "Termites", U.Guard "Action"    "Pay"] "-1001000"
-                                         ,U.Clause [U.Guard "Infestation"   "Termites", U.Guard "Action" "Refuse"] "-1000000"
-                                         ,U.Clause [U.Guard "Infestation" "NoTermites", U.Guard "Action"    "Pay"]    "-1000"
-                                         ,U.Clause [U.Guard "Infestation" "NoTermites", U.Guard "Action" "Refuse"]        "0"
-                                         ]
-
+          action         = UG.Conditional [UG.Clause [UG.Guard "Predisposition"   "Payer"]   "Pay"
+                                          ,UG.Clause [UG.Guard "Predisposition" "Refuser"] "Refuse"
+                                          ]
+          value          = UG.Conditional [UG.Clause [UG.Guard "Infestation"   "Termites", UG.Guard "Action"    "Pay"] "-1001000"
+                                          ,UG.Clause [UG.Guard "Infestation"   "Termites", UG.Guard "Action" "Refuse"] "-1000000"
+                                          ,UG.Clause [UG.Guard "Infestation" "NoTermites", UG.Guard "Action"    "Pay"]    "-1000"
+                                          ,UG.Clause [UG.Guard "Infestation" "NoTermites", UG.Guard "Action" "Refuse"]        "0"
+                                          ]
 
   data Infestation    = Termites   | NoTermites  deriving (Eq, Show, Typeable, Data)
   data Predisposition = Payer      | Refuser     deriving (Eq, Show, Typeable, Data)
@@ -53,42 +54,44 @@ module XorBlackmail (tests) where
   data Action         = Pay        | Refuse      deriving (Eq, Show, Typeable, Data)
   newtype Value       = Value Int                deriving (Eq, Show, Typeable, Data)
 
-  instance {-# OVERLAPS #-} Stateable Value where
+  instance {-# OVERLAPPING #-} TG.Stateable Value where
     toState (Value n) = State $ show n
+    ofState (State s) = Value <$> readMaybe s
 
-  typedXorBlackmail =
-        Distribution [  Termites %= 0.5
+  utilityFunction :: Value -> U.Utility
+  utilityFunction (Value v) = fromIntegral v
+
+  xorBlackmail =
+        distribution [  Termites %= 0.5
                      ,NoTermites %= 0.5
                      ]
-    :*: Distribution [  Payer %= 0.5
+    .*. distribution [  Payer %= 0.5
                      ,Refuser %= 0.5
                      ]
-    :*: Case (When (Is   Termites :&: Is   Payer) Skeptic
-          :|: When (Is   Termites :&: Is Refuser) Gullible
-          :|: When (Is NoTermites :&: Is   Payer) Gullible
-          :|: When (Is NoTermites :&: Is Refuser) Skeptic)
-    :*: Case (When (Is Gullible)   Letter
-          :|: When (Is Skeptic)  NoLetter)
-    :*: Case (When (Is   Payer) Pay
-          :|: When (Is Refuser) Refuse)
-    :*: Case (When (Is   Termites :&: Is Pay)    (Value $ -1001000)
-          :|: When (Is   Termites :&: Is Refuse) (Value $ -1000000)
-          :|: When (Is NoTermites :&: Is Pay)    (Value $    -1000)
-          :|: When (Is NoTermites :&: Is Refuse) (Value          0))
+    .*. depends (when (is   Termites .&. is   Payer) Skeptic
+             .|. when (is   Termites .&. is Refuser) Gullible
+             .|. when (is NoTermites .&. is   Payer) Gullible
+             .|. when (is NoTermites .&. is Refuser) Skeptic)
+    .*. depends (when (is Gullible)   Letter
+             .|. when (is Skeptic)  NoLetter)
+    .*. depends (when (is   Payer) Pay
+             .|. when (is Refuser) Refuse)
+    .*. depends (when (is   Termites .&. is Pay)    (Value $ -1001000)
+             .|. when (is   Termites .&. is Refuse) (Value $ -1000000)
+             .|. when (is NoTermites .&. is Pay)    (Value $    -1000)
+             .|. when (is NoTermites .&. is Refuse) (Value          0))
 
-  xorBlackmailOf :: ([U.Guard] -> Search -> U.Graph U.Stochastic -> a) -> a
-  xorBlackmailOf t = t [U.Guard "Observation" "Letter"] stdSearch xorBlackmail
+  xorBlackmailOf t = t (is Letter) utilityFunction xorBlackmail
 
   tests :: IO ()
-  tests = hspec $ do
+  tests = hspec $
     describe "XOR Blackmail" $ do
-      it "XOR Blackmail allows one to pay or refuse" $ do
-        U.choices "Action" (U.branches xorBlackmail) `shouldBe` ["Pay", "Refuse"]
-      it "EDT chooses to pay" $ do
-        xorBlackmailOf edt `shouldBe` ("Pay", -1000.0)
-      it "CDT chooses to refuse" $ do
-        xorBlackmailOf cdt `shouldBe` ("Refuse", -1000000.0)
-      it "FDT chooses to refuse" $ do
-        xorBlackmailOf (fdt "Predisposition") `shouldBe` ("Refuse", -1000000.0)
+      it "XOR Blackmail allows one to pay or refuse" $
+        UG.choices "Action" (UG.branches untypedXorBlackmail) `shouldBe` ["Pay", "Refuse"]
       it "Typed graph should compile to the untyped graph" $ do
-        compile typedXorBlackmail `shouldBe` xorBlackmail
+        TG.compile xorBlackmail `shouldBe` untypedXorBlackmail
+      it "EDT chooses to pay"    $ xorBlackmailOf  T.edt    `shouldBe` (Pay,       -1000.0)
+      it "CDT chooses to refuse" $ xorBlackmailOf  T.cdt    `shouldBe` (Refuse, -1000000.0)
+      it "FDT chooses to refuse" $ xorBlackmailOf (T.fdt p) `shouldBe` (Refuse, -1000000.0)
+    where p :: Proxy Predisposition
+          p = Proxy
