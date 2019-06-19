@@ -1,3 +1,6 @@
+{-# LANGUAGE
+    ViewPatterns
+  #-}
 module DecisionTheory.DecisionTheory where
 
   import qualified Data.List as L
@@ -29,7 +32,7 @@ module DecisionTheory.DecisionTheory where
           conclusion v = (v, hypothesis (Guard a v) possibleBranches)
           possibleBranches = foldl (flip condition) (branches g) gs
           expectedValue :: Probability (Graph Deterministic) -> Utility
-          expectedValue (Probability g v) = ((* fromRational v) . uf) $ M.fromJust $ find o g
+          expectedValue (unProbability -> (g, v)) = ((* fromRational v) . uf) $ M.fromJust $ find o g
           expectation :: (State, [Probability (Graph Deterministic)]) -> (State, Utility)
           expectation (v, ps) = (v, sum $ map expectedValue ps)
 
@@ -52,7 +55,7 @@ module DecisionTheory.DecisionTheory where
 
   condition :: Hypothesis
   condition (Guard l v) = normalize . filter branchSatisfiesGuard
-    where branchSatisfiesGuard (Probability g _) = Just v == find l g
+    where branchSatisfiesGuard (probabilityElement -> g) = Just v == find l g
 
   intervene :: Hypothesis
   intervene (Guard l v) = normalize . map (mapBranches intervention)

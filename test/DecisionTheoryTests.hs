@@ -20,8 +20,8 @@ module DecisionTheoryTests (tests) where
                 ,Labeled "b" b
                 ,Labeled "c" c
                 ]
-    where a = Distribution [Probability "a1" 0.5
-                           ,Probability "a2" 0.5
+    where a = Distribution ["a1" %= 0.5
+                           ,"a2" %= 0.5
                            ]
           b = Conditional [Clause [Guard "a" "a1"] "b1"
                           ,Clause [Guard "a" "a2"] "b2"
@@ -32,34 +32,36 @@ module DecisionTheoryTests (tests) where
                           ,Clause [Guard "a" "a2", Guard "b" "b2"] "c4"
                           ]
   weirdBranches :: [Probability (Graph Deterministic)]
-  weirdBranches = [Probability (Graph [Labeled "a" (Always "a1")
-                                         ,Labeled "b" (Conditional [Clause [Guard "a" "a1"] "b1",Clause [Guard "a" "a2"] "b2"])
-                                         ,Labeled "c" (Conditional [Clause [Guard "a" "a1",Guard "b" "b1"] "c1",Clause [Guard "a" "a1",Guard "b" "b2"] "c2",Clause [Guard "a" "a2",Guard "b" "b1"] "c3",Clause [Guard "a" "a2",Guard "b" "b2"] "c4"])
-                                         ]) 0.5
-                     ,Probability (Graph [Labeled "a" (Always "a2")
-                                         ,Labeled "b" (Conditional [Clause [Guard "a" "a1"] "b1",Clause [Guard "a" "a2"] "b2"])
-                                         ,Labeled "c" (Conditional [Clause [Guard "a" "a1",Guard "b" "b1"] "c1",Clause [Guard "a" "a1",Guard "b" "b2"] "c2",Clause [Guard "a" "a2",Guard "b" "b1"] "c3",Clause [Guard "a" "a2",Guard "b" "b2"] "c4"])
-                                         ]) 0.5
-                     ]
+  weirdBranches = [(Graph [Labeled "a" (Always "a1")
+                          ,Labeled "b" (Conditional [Clause [Guard "a" "a1"] "b1",Clause [Guard "a" "a2"] "b2"])
+                          ,Labeled "c" (Conditional [Clause [Guard "a" "a1",Guard "b" "b1"] "c1",Clause [Guard "a" "a1",Guard "b" "b2"] "c2",Clause [Guard "a" "a2",Guard "b" "b1"] "c3",Clause [Guard "a" "a2",Guard "b" "b2"] "c4"])
+                          ])
+                   %= 0.5
+                  ,(Graph [Labeled "a" (Always "a2")
+                          ,Labeled "b" (Conditional [Clause [Guard "a" "a1"] "b1",Clause [Guard "a" "a2"] "b2"])
+                          ,Labeled "c" (Conditional [Clause [Guard "a" "a1",Guard "b" "b1"] "c1",Clause [Guard "a" "a1",Guard "b" "b2"] "c2",Clause [Guard "a" "a2",Guard "b" "b1"] "c3",Clause [Guard "a" "a2",Guard "b" "b2"] "c4"])
+                          ])
+                   %= 0.5
+                  ]
 
   simple :: Graph Stochastic
-  simple = Graph [Labeled "a" $ Distribution [Probability "a1" 0.1
-                                             ,Probability "a2" 0.9
+  simple = Graph [Labeled "a" $ Distribution ["a1" %= 0.1
+                                             ,"a2" %= 0.9
                                              ]
-                 ,Labeled "b" $ Distribution [Probability "b1" 0.3
-                                             ,Probability "b2" 0.7
+                 ,Labeled "b" $ Distribution ["b1" %= 0.3
+                                             ,"b2" %= 0.7
                                              ]
                  ]
 
   simpleBranches :: [Probability (Graph Deterministic)]
-  simpleBranches = [Probability (Graph [Labeled "a" (Always "a1"),Labeled "b" (Always "b1")]) 0.03
-                   ,Probability (Graph [Labeled "a" (Always "a1"),Labeled "b" (Always "b2")]) 0.07
-                   ,Probability (Graph [Labeled "a" (Always "a2"),Labeled "b" (Always "b1")]) 0.27
-                   ,Probability (Graph [Labeled "a" (Always "a2"),Labeled "b" (Always "b2")]) 0.63
+  simpleBranches = [(Graph [Labeled "a" (Always "a1"),Labeled "b" (Always "b1")]) %= 0.03
+                   ,(Graph [Labeled "a" (Always "a1"),Labeled "b" (Always "b2")]) %= 0.07
+                   ,(Graph [Labeled "a" (Always "a2"),Labeled "b" (Always "b1")]) %= 0.27
+                   ,(Graph [Labeled "a" (Always "a2"),Labeled "b" (Always "b2")]) %= 0.63
                    ]
 
   instance QC.Arbitrary a => QC.Arbitrary (Probability a) where
-    arbitrary = Probability <$> QC.arbitrary <*> QC.arbitrary
+    arbitrary = (%=) <$> QC.arbitrary <*> QC.arbitrary
 
   -- props to https://austinrochford.com/posts/2014-05-27-quickcheck-laws.html
   monadLeftIdProp :: (Monad m, Eq (m b)) => a -> QCF.Fun a (m b) -> Bool
@@ -73,18 +75,19 @@ module DecisionTheoryTests (tests) where
   monadAssocProp :: (Monad m, Eq (m c)) => m a -> QCF.Fun a (m b) -> QCF.Fun b (m c) -> Bool
   monadAssocProp x (QCF.apply -> f) (QCF.apply -> g) = ((x >>= f) >>= g) == (x >>= (f >=> g))
 
-
   tests :: IO ()
   tests = hspec $ do
     describe "Probability tests" $ do
       it "\"Weird\" branches" $ do
         branches weird `shouldBe` weirdBranches
       it "\"Weird\" probabilities for \"c\"" $ do
-        probabilities "c" (branches weird) `shouldBe` [Probability "c1" 0.5, Probability "c4" 0.5]
+        probabilities "c" (branches weird) `shouldBe` ["c1" %= 0.5
+                                                      ,"c4" %= 0.5]
       it "\"Simple\" branches" $ do
         branches simple `shouldBe` simpleBranches
       it "\"Simple\" branches" $ do
-        normalize [Probability ("A" :: String) 0.1, Probability "B" 0.3] `shouldBe` [Probability "A" 0.25,Probability "B" 0.75]
+        normalize [("A") %= 0.10, "B" %= 0.30]
+        `shouldBe` ["A"            %= 0.25, "B" %= 0.75]
     describe "Probability Monad laws" $ do
       prop "Left Identity" (monadLeftIdProp :: Int -> QCF.Fun Int (Probability String) -> Bool)
       prop "Right Identity" (monadRightIdProp :: Probability String -> Bool)

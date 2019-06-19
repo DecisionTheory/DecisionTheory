@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings, DeriveDataTypeable #-}
+{-# LANGUAGE OverloadedStrings, DeriveDataTypeable, DataKinds, FlexibleContexts, TypeApplications #-}
 {-# OPTIONS_GHC -fno-warn-missing-signatures #-}
 {- HLINT ignore "Redundant do" -}
 
@@ -25,11 +25,11 @@ module Newcomb (tests) where
                             ,Labeled "Outcome"        outcome
                             ,Labeled "Value"          value
                             ]
-    where predisposition = UG.Distribution [Probability "Oneboxer" 0.5
-                                           ,Probability "Twoboxer" 0.5
+    where predisposition = UG.Distribution ["Oneboxer" %= 0.5
+                                           ,"Twoboxer" %= 0.5
                                            ]
-          accuracy       = UG.Distribution [Probability   "Accurate" 0.99
-                                           ,Probability "Inaccurate" 0.01
+          accuracy       = UG.Distribution [  "Accurate" %= 0.99
+                                           ,"Inaccurate" %= 0.01
                                            ]
           action         = UG.Conditional [UG.Clause [UG.Guard "Predisposition" "Oneboxer"] "Onebox"
                                           ,UG.Clause [UG.Guard "Predisposition" "Twoboxer"] "Twobox"
@@ -69,43 +69,42 @@ module Newcomb (tests) where
   utilityFunction (Value v) = fromIntegral v
 
   newcomb =
-        distribution [Oneboxer %= 0.5
-                     ,Twoboxer %= 0.5
-                     ]
-    .*. distribution [  Accurate %= 0.99
-                     ,Inaccurate %= 0.01
-                     ]
-    .*. depends (when (is Oneboxer) Onebox
-             .|. when (is Twoboxer) Twobox)
-    .*. depends (when (is Oneboxer .&. is   Accurate) P1
-             .|. when (is Twoboxer .&. is   Accurate) P2
-             .|. when (is Oneboxer .&. is Inaccurate) P2
-             .|. when (is Twoboxer .&. is Inaccurate) P1)
-    .*. depends (when (is P1)  Full
-             .|. when (is P2) Empty)
-    .*. depends (when (is Onebox .&. is  Full) F1
-             .|. when (is Twobox .&. is  Full) F2
-             .|. when (is Onebox .&. is Empty) E1
-             .|. when (is Twobox .&. is Empty) E2)
-    .*. depends (when (is F1) (Value 1000000)
-             .|. when (is F2) (Value 1001000)
-             .|. when (is E1) (Value       0)
-             .|. when (is E2) (Value    1000))
-
+        distribution @Predisposition [Oneboxer %= 0.5
+                                     ,Twoboxer %= 0.5
+                                     ]
+    .*. distribution @Accuracy [  Accurate %= 0.99
+                               ,Inaccurate %= 0.01
+                               ]
+    .*. depends @Action (when (is Oneboxer) Onebox
+                     .|. when (is Twoboxer) Twobox)
+    .*. depends @Prediction (when (is Oneboxer .&. is   Accurate) P1
+                         .|. when (is Twoboxer .&. is   Accurate) P2
+                         .|. when (is Oneboxer .&. is Inaccurate) P2
+                         .|. when (is Twoboxer .&. is Inaccurate) P1)
+    .*. depends @BoxB (when (is P1)  Full
+                   .|. when (is P2) Empty)
+    .*. depends @Outcome (when (is Onebox .&. is  Full) F1
+                      .|. when (is Twobox .&. is  Full) F2
+                      .|. when (is Onebox .&. is Empty) E1
+                      .|. when (is Twobox .&. is Empty) E2)
+    .*. depends @Value (when (is F1) (Value 1000000)
+                    .|. when (is F2) (Value 1001000)
+                    .|. when (is E1) (Value       0)
+                    .|. when (is E2) (Value    1000))
 
   newcombOf t = t TG.true utilityFunction newcomb
 
   unreliableNewcomb :: UG.Graph UG.Stochastic
   unreliableNewcomb = UG.replaceG unreliability untypedNewcomb
-    where unreliability ln@(Labeled l _) | l == "Accuracy" = Labeled l $ UG.Distribution [Probability   "Accurate" 0.5
-                                                                                         ,Probability "Inaccurate" 0.5
+    where unreliability ln@(Labeled l _) | l == "Accuracy" = Labeled l $ UG.Distribution [  "Accurate" %= 0.5
+                                                                                         ,"Inaccurate" %= 0.5
                                                                                          ]
                                          | otherwise       = ln
 
   lessUnreliableNewcomb :: UG.Graph UG.Stochastic
   lessUnreliableNewcomb = UG.replaceG lesserUnreliability untypedNewcomb
-    where lesserUnreliability ln@(Labeled l _) | l == "Accuracy" = Labeled l $ UG.Distribution [Probability   "Accurate" 0.51
-                                                                                               ,Probability "Inaccurate" 0.49
+    where lesserUnreliability ln@(Labeled l _) | l == "Accuracy" = Labeled l $ UG.Distribution [  "Accurate" %= 0.51
+                                                                                               ,"Inaccurate" %= 0.49
                                                                                                ]
                                                | otherwise       = ln
 

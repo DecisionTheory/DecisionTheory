@@ -24,11 +24,11 @@ module ParfitsHitchhiker (tests) where
                                       ,Labeled "Action"         action
                                       ,Labeled "Value"          value
                                       ]
-    where predisposition = UG.Distribution [Probability "Trustworthy"   0.5
-                                           ,Probability "Untrustworthy" 0.5
+    where predisposition = UG.Distribution ["Trustworthy"   %= 0.5
+                                           ,"Untrustworthy" %= 0.5
                                            ]
-          accuracy       = UG.Distribution [Probability "Accurate"   0.99
-                                           ,Probability "Inaccurate" 0.01
+          accuracy       = UG.Distribution ["Accurate"   %= 0.99
+                                           ,"Inaccurate" %= 0.01
                                            ]
           offer          = UG.Conditional [UG.Clause [UG.Guard "Predisposition" "Trustworthy",   UG.Guard "Accuracy"   "Accurate"]   "Ride"
                                           ,UG.Clause [UG.Guard "Predisposition" "Trustworthy",   UG.Guard "Accuracy" "Inaccurate"] "NoRide"

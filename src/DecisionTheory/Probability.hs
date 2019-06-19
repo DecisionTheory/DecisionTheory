@@ -1,4 +1,12 @@
-module DecisionTheory.Probability where
+module DecisionTheory.Probability
+  ( Probability ()
+  , unProbability
+  , probabilityElement
+  , probabilityValue
+  , (%=)
+  , squash
+  , normalize
+  ) where
 
   import qualified Data.List as L
 
@@ -15,10 +23,6 @@ module DecisionTheory.Probability where
 
   probabilityValue :: Probability a -> Rational
   probabilityValue (Probability _ r) = r
-
-  mkProbability :: a -> Rational -> Probability a
-  mkProbability a x | x > 0 && x < 1 = Probability a x
-                    | otherwise      = error $ "Invalid probability " ++ show x
 
   (%=) :: a -> Rational -> Probability a
   (%=) = Probability
