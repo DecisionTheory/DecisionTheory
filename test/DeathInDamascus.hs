@@ -14,7 +14,7 @@ module DeathInDamascus (tests) where
   import qualified DecisionTheory.DecisionTheory as U
   import qualified DecisionTheory.TypedGraph as TG
   import qualified DecisionTheory.TypedDecisionTheory as T
-  import DecisionTheory.TypedGraph(distribution, depends, when, is, fallback, (.*.), (.|.), (.&.))
+  import DecisionTheory.TypedGraph(distribution, choose, when, is, elsewise, (.*.), (.|.), (.&.))
 
   untypedDeathInDamascus :: UG.Graph UG.Stochastic
   untypedDeathInDamascus = UG.Graph [Labeled "Predisposition" predisposition
@@ -61,18 +61,18 @@ module DeathInDamascus (tests) where
         distribution [ Fleer %= 0.5
                      ,Stayer %= 0.5
                      ]
-    .*. depends (when (is Fleer)  Flee
-             .|. when (is Stayer) Stay)
-    .*. depends (when (is Fleer)  Aleppo
-             .|. when (is Stayer) Damascus)
-    .*. depends (when (is Stay .&. is Damascus) StayAndDie
-             .|. when (is Stay .&. is Aleppo)   StayAndLive
-             .|. when (is Flee .&. is Damascus) FleeAndLive
-             .|. when (is Flee .&. is Aleppo)   FleeAndDie)
-    .*. depends (when (is StayAndDie)  (Value     0)
-             .|. when (is StayAndLive) (Value  1000)
-             .|. when (is FleeAndLive) (Value   999)
-             .|. when (is FleeAndDie)  (Value  $ -1))
+    .*. choose (when (is Fleer)  Flee
+            .|. when (is Stayer) Stay)
+    .*. choose (when (is Fleer)  Aleppo
+            .|. when (is Stayer) Damascus)
+    .*. choose (when (is Stay .&. is Damascus) StayAndDie
+            .|. when (is Stay .&. is Aleppo)   StayAndLive
+            .|. when (is Flee .&. is Damascus) FleeAndLive
+            .|. when (is Flee .&. is Aleppo)   FleeAndDie)
+    .*. choose (when (is StayAndDie)  (Value     0)
+            .|. when (is StayAndLive) (Value  1000)
+            .|. when (is FleeAndLive) (Value   999)
+            .|. when (is FleeAndDie)  (Value  $ -1))
 
   deathInDamascusOf t = t TG.true utilityFunction deathInDamascus
 
@@ -86,7 +86,5 @@ module DeathInDamascus (tests) where
       it "CDT's choice alternates between stay and flee" $ do
         U.unstableDT U.intervene [UG.Guard "Action" "Stay"] U.stdSearch untypedDeathInDamascus `shouldBe` ("Flee", 999.0)
         U.unstableDT U.intervene [UG.Guard "Action" "Flee"] U.stdSearch untypedDeathInDamascus `shouldBe` ("Stay", 1000.0)
-      it "EDT chooses to stay" $ deathInDamascusOf  T.edt    `shouldBe` (Stay, 0.0)
-      it "FDT chooses to stay" $ deathInDamascusOf (T.fdt p) `shouldBe` (Stay, 0.0)
-    where p :: Proxy Predisposition
-          p = Proxy
+      it "EDT chooses to stay" $ deathInDamascusOf  T.edt                  `shouldBe` (Stay, 0.0)
+      it "FDT chooses to stay" $ deathInDamascusOf (T.fdt @Predisposition) `shouldBe` (Stay, 0.0)

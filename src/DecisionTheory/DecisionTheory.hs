@@ -1,7 +1,22 @@
 {-# LANGUAGE
     ViewPatterns
+  , GeneralizedNewtypeDeriving
   #-}
-module DecisionTheory.DecisionTheory where
+module DecisionTheory.DecisionTheory
+  ( Utility (..)
+  , Search (..)
+  , stdSearch
+  , Hypothesis
+  , condition
+  , unstableDT
+  , dt
+  , edt
+  , intervene
+  , cdt
+  , counterFactualize
+  , fdt
+  )
+  where
 
   import qualified Data.List as L
   import qualified Data.Maybe as M
@@ -13,13 +28,13 @@ module DecisionTheory.DecisionTheory where
   import DecisionTheory.Probability
   import DecisionTheory.Graph
 
-  -- FIXME newtype
-  type Utility = Float
+  newtype Utility = Utility Float deriving (Num, Fractional, Eq, Ord, Show, Read)
 
   data Search = Search (State -> Utility) Label Label
+
   stdSearch :: Search
   stdSearch = Search uf (Label "Action") (Label "Value")
-    where uf (State s) = read s
+    where uf (State s) = Utility $ read s
 
   type Hypothesis = (Guard -> Endo [Probability (Graph Deterministic)])
 
