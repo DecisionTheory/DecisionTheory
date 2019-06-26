@@ -166,13 +166,13 @@ module DecisionTheory.TypedGraph where
   instance (Eq (Graph g), Eq (Graph h)) => Eq (Graph (AppendT g h)) where
     (a :*: b) == (c :*: d) = (a == c) && (b == d)
 
-  distribution :: [Probability o] -> E '[] '[o] (Graph (DistributionT o))
+  distribution :: forall o. [Probability o] -> E '[] '[o] (Graph (DistributionT o))
   distribution ps = E (Distribution ps)
 
-  always :: o -> E '[] '[o] (Graph (AlwaysT o))
+  always :: forall o. o -> E '[] '[o] (Graph (AlwaysT o))
   always o = E (Always o)
 
-  depends :: E i '[o] (Clause c o) -> E i '[o] (Graph (ConditionalT (Clause c o)))
+  depends :: forall o i c. E i '[o] (Clause c o) -> E i '[o] (Graph (ConditionalT (Clause c o)))
   depends (E c) = E (Case c)
 
   class NoDuplicatedOutputs (o :: [*])

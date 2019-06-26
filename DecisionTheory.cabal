@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: a066ef6e55266a7ee3de933e17dfff6b7e15836affe50198b96889a73b629015
+-- hash: b8f21c0a6654662aee07178d153e3a1ebc3d58c4a298be721bdf60dc6191b837
 
 name:           DecisionTheory
 version:        0.1.0.0
@@ -27,6 +27,7 @@ source-repository head
 library
   exposed-modules:
       DecisionTheory.Base
+      DecisionTheory.Debug
       DecisionTheory.DecisionTheory
       DecisionTheory.Graph
       DecisionTheory.Probability

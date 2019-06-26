@@ -24,11 +24,11 @@ module XorBlackmail (tests) where
                                  ,Labeled "Action"         action
                                  ,Labeled "Value"          value
                                  ]
-    where infestation    = UG.Distribution [Probability   "Termites" 0.5
-                                           ,Probability "NoTermites" 0.5
+    where infestation    = UG.Distribution [  "Termites" %= 0.5
+                                           ,"NoTermites" %= 0.5
                                            ]
-          predisposition = UG.Distribution [Probability   "Payer" 0.5
-                                           ,Probability "Refuser" 0.5
+          predisposition = UG.Distribution [  "Payer" %= 0.5
+                                           ,"Refuser" %= 0.5
                                            ]
           prediction     = UG.Conditional [UG.Clause [UG.Guard "Infestation" "Termites",   UG.Guard "Predisposition"   "Payer"]  "Skeptic"
                                           ,UG.Clause [UG.Guard "Infestation" "Termites",   UG.Guard "Predisposition" "Refuser"] "Gullible"

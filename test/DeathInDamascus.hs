@@ -23,8 +23,8 @@ module DeathInDamascus (tests) where
                                     ,Labeled "Outcome"        outcome
                                     ,Labeled "Value"          value
                                     ]
-    where predisposition = UG.Distribution [Probability "Fleer"  0.5
-                                           ,Probability "Stayer" 0.5
+    where predisposition = UG.Distribution ["Fleer"  %= 0.5
+                                           ,"Stayer" %= 0.5
                                            ]
           action         = UG.Conditional [UG.Clause [UG.Guard "Predisposition" "Fleer"]  "Flee"
                                           ,UG.Clause [UG.Guard "Predisposition" "Stayer"] "Stay"

@@ -1,6 +1,11 @@
-module DecisionTheory.Base where
-  import GHC.Exts (IsString(fromString))
-  import System.IO.Unsafe
+module DecisionTheory.Base
+  ( Label (..)
+  , State (..)
+  , Labeled (..)
+  , Endo
+  ) where
+
+  import GHC.Exts ( IsString ( fromString ) )
 
   type Endo a = a -> a
 
@@ -21,5 +26,3 @@ module DecisionTheory.Base where
 
   instance Functor Labeled where
     fmap f (Labeled l a) = Labeled l (f a)
-
-  tap l a = unsafePerformIO (print $ show l ++ show a) `seq` a
