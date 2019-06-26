@@ -1,6 +1,21 @@
-{-# LANGUAGE ScopedTypeVariables, FlexibleContexts, MonoLocalBinds, ConstraintKinds, DataKinds, KindSignatures #-}
+{-# LANGUAGE
+    AllowAmbiguousTypes
+  , ConstraintKinds
+  , DataKinds
+  , FlexibleContexts
+  , KindSignatures
+  , MonoLocalBinds
+  , ScopedTypeVariables
+  #-}
 
-module DecisionTheory.TypedDecisionTheory (dt, edt, cdt, fdt) where
+module DecisionTheory.TypedDecisionTheory
+  ( dt
+  , edt
+  , cdt
+  , fdt
+  , ValidInterventionNode
+  ) where
+
   import Data.Data
   import Data.Typeable
   import Data.Maybe (fromJust)
@@ -10,10 +25,24 @@ module DecisionTheory.TypedDecisionTheory (dt, edt, cdt, fdt) where
   import qualified DecisionTheory.Graph as UG
   import qualified DecisionTheory.TypedGraph as TG
 
-  type Compilable a v p g gi go = (TG.Stateable a, TG.Labelable a, TG.Stateable v, TG.Labelable v, TG.Compilable (TG.Guard p) [UG.Guard], TG.Compilable (TG.E gi go (TG.Graph g)) (UG.Graph UG.Stochastic))
-  type Decidable a v p pi g gi go = (Compilable a v p g gi go, TG.AllInputsSatisfied (TG.Difference pi go))
+  type Compilable a v p    g gi go = ( TG.Stateable a
+                                     , TG.Labelable a
+                                     , TG.Stateable v
+                                     , TG.Labelable v
+                                     , TG.Compilable (TG.Guard p) [UG.Guard]
+                                     , TG.Compilable (TG.E gi go (TG.Graph g)) (UG.Graph UG.Stochastic)
+                                     )
+  type Decidable  a v p pi g gi go = ( Compilable a v p g gi go
+                                     , TG.AllInputsSatisfied (TG.Difference pi go)
+                                     )
 
-  dt :: forall a v p pi po g gi go. (Decidable a v p pi g gi go) => DT.Hypothesis -> TG.E pi po (TG.Guard p) -> (v -> DT.Utility) -> TG.E gi go (TG.Graph g) -> (a, DT.Utility)
+  dt :: forall a v p pi po g gi go.
+          Decidable a v p pi g gi go
+          => DT.Hypothesis
+          -> TG.E pi po (TG.Guard p)
+          -> (v -> DT.Utility)
+          -> TG.E gi go (TG.Graph g)
+          -> (a, DT.Utility)
   dt h gs uf g = result $ DT.dt h guards search graph
     where guards        = TG.compile gs
           search        = DT.Search (uf . fromJust . TG.ofState) (TG.toLabel (undefined :: a)) (TG.toLabel (undefined :: v))
@@ -22,14 +51,32 @@ module DecisionTheory.TypedDecisionTheory (dt, edt, cdt, fdt) where
           result (s, u) = (fromJust $ TG.ofState s, u)
 
 
-  edt :: Decidable a v p pi g gi go => TG.E pi po (TG.Guard p) -> (v -> DT.Utility) -> TG.E gi go (TG.Graph g) -> (a, DT.Utility)
+  edt :: forall a v p pi po g gi go.
+           Decidable a v p pi g gi go
+           => TG.E pi po (TG.Guard p)
+           -> (v -> DT.Utility)
+           -> TG.E gi go (TG.Graph g)
+           -> (a, DT.Utility)
   edt = dt DT.condition
 
-  cdt :: Decidable a v p pi g gi go => TG.E pi po (TG.Guard p) -> (v -> DT.Utility) -> TG.E gi go (TG.Graph g) -> (a, DT.Utility)
+  cdt :: forall a v p pi po g gi go.
+           Decidable a v p pi g gi go
+           => TG.E pi po (TG.Guard p)
+           -> (v -> DT.Utility)
+           -> TG.E gi go (TG.Graph g)
+           -> (a, DT.Utility)
   cdt = dt DT.intervene
 
   class ValidInterventionNode (i :: [*])
   instance ValidInterventionNode '[]
 
-  fdt :: (Decidable a v p pi g gi go, Typeable t, ValidInterventionNode (TG.Difference '[t] go)) => Proxy t -> TG.E pi po (TG.Guard p) -> (v -> DT.Utility) -> TG.E gi go (TG.Graph g) -> (a, DT.Utility)
-  fdt = dt . DT.counterFactualize . TG.toLabel
+  fdt :: forall t a v p pi po g gi go.
+           ( Decidable a v p pi g gi go
+           , TG.Labelable t
+           , ValidInterventionNode (TG.Difference '[t] go)
+           )
+           => TG.E pi po (TG.Guard p)
+           -> (v -> DT.Utility)
+           -> TG.E gi go (TG.Graph g)
+           -> (a, DT.Utility)
+  fdt = dt $ DT.counterFactualize $ TG.toLabel $ (undefined :: t)

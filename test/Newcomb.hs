@@ -14,7 +14,7 @@ module Newcomb (tests) where
   import qualified DecisionTheory.DecisionTheory as U
   import qualified DecisionTheory.TypedGraph as TG
   import qualified DecisionTheory.TypedDecisionTheory as T
-  import DecisionTheory.TypedGraph(distribution, depends, when, is, fallback, (.*.), (.|.), (.&.))
+  import DecisionTheory.TypedGraph(distribution, choose, when, is, elsewise, (.*.), (.|.), (.&.))
 
   untypedNewcomb :: UG.Graph UG.Stochastic
   untypedNewcomb = UG.Graph [Labeled "Predisposition" predisposition
@@ -75,22 +75,22 @@ module Newcomb (tests) where
     .*. distribution @Accuracy [  Accurate %= 0.99
                                ,Inaccurate %= 0.01
                                ]
-    .*. depends @Action (when (is Oneboxer) Onebox
-                     .|. when (is Twoboxer) Twobox)
-    .*. depends @Prediction (when (is Oneboxer .&. is   Accurate) P1
-                         .|. when (is Twoboxer .&. is   Accurate) P2
-                         .|. when (is Oneboxer .&. is Inaccurate) P2
-                         .|. when (is Twoboxer .&. is Inaccurate) P1)
-    .*. depends @BoxB (when (is P1)  Full
-                   .|. when (is P2) Empty)
-    .*. depends @Outcome (when (is Onebox .&. is  Full) F1
-                      .|. when (is Twobox .&. is  Full) F2
-                      .|. when (is Onebox .&. is Empty) E1
-                      .|. when (is Twobox .&. is Empty) E2)
-    .*. depends @Value (when (is F1) (Value 1000000)
-                    .|. when (is F2) (Value 1001000)
-                    .|. when (is E1) (Value       0)
-                    .|. when (is E2) (Value    1000))
+    .*. choose @Action     (when (is Oneboxer) Onebox
+                        .|. when (is Twoboxer) Twobox)
+    .*. choose @Prediction (when (is Oneboxer .&. is   Accurate) P1
+                        .|. when (is Twoboxer .&. is   Accurate) P2
+                        .|. when (is Oneboxer .&. is Inaccurate) P2
+                        .|. when (is Twoboxer .&. is Inaccurate) P1)
+    .*. choose @BoxB       (when (is P1)  Full
+                        .|. when (is P2) Empty)
+    .*. choose @Outcome    (when (is Onebox .&. is  Full) F1
+                        .|. when (is Twobox .&. is  Full) F2
+                        .|. when (is Onebox .&. is Empty) E1
+                        .|. when (is Twobox .&. is Empty) E2)
+    .*. choose @Value      (when (is F1) (Value 1000000)
+                        .|. when (is F2) (Value 1001000)
+                        .|. when (is E1) (Value       0)
+                        .|. when (is E2) (Value    1000))
 
   newcombOf t = t TG.true utilityFunction newcomb
 
@@ -115,14 +115,12 @@ module Newcomb (tests) where
         UG.choices "Action" (UG.branches untypedNewcomb) `shouldBe` ["Onebox", "Twobox"]
       it "Typed graph should compile to the untyped graph" $
         TG.compile newcomb `shouldBe` untypedNewcomb
-      it "EDT chooses to onebox" $ newcombOf  T.edt    `shouldBe` (Onebox, 990000.0)
-      it "CDT chooses to twobox" $ newcombOf  T.cdt    `shouldBe` (Twobox,  11000.0)
-      it "FDT chooses to onebox" $ newcombOf (T.fdt p) `shouldBe` (Onebox, 990000.0)
+      it "EDT chooses to onebox" $ newcombOf  T.edt                  `shouldBe` (Onebox, 990000.0)
+      it "CDT chooses to twobox" $ newcombOf  T.cdt                  `shouldBe` (Twobox,  11000.0)
+      it "FDT chooses to onebox" $ newcombOf (T.fdt @Predisposition) `shouldBe` (Onebox, 990000.0)
       it "FDT chooses to onebox even with transparency" $
-        T.fdt p (is Full) utilityFunction newcomb                   `shouldBe` (Onebox, 1000000.0)
+        T.fdt @Predisposition (is Full) utilityFunction newcomb      `shouldBe` (Onebox, 1000000.0)
       it "FDT chooses to twobox when Omega prediction is unreliable" $
-        U.fdt "Predisposition" [] U.stdSearch unreliableNewcomb     `shouldBe` ("Twobox", 501000.0)
+        U.fdt "Predisposition" [] U.stdSearch unreliableNewcomb      `shouldBe` ("Twobox", 501000.0)
       it "FDT chooses to onebox when Omega prediction is less unreliable" $
-        U.fdt "Predisposition" [] U.stdSearch lessUnreliableNewcomb `shouldBe` ("Onebox", 510000.0)
-    where p :: Proxy Predisposition
-          p = Proxy
+        U.fdt "Predisposition" [] U.stdSearch lessUnreliableNewcomb  `shouldBe` ("Onebox", 510000.0)

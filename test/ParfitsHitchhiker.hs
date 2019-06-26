@@ -14,7 +14,7 @@ module ParfitsHitchhiker (tests) where
   import qualified DecisionTheory.DecisionTheory as U
   import qualified DecisionTheory.TypedGraph as TG
   import qualified DecisionTheory.TypedDecisionTheory as T
-  import DecisionTheory.TypedGraph(distribution, depends, when, is, fallback, (.*.), (.|.), (.&.))
+  import DecisionTheory.TypedGraph(distribution, choose, when, is, elsewise, (.*.), (.|.), (.&.))
 
   untypedParfitsHitchhiker :: UG.Graph UG.Stochastic
   untypedParfitsHitchhiker = UG.Graph [Labeled "Predisposition" predisposition
@@ -67,17 +67,17 @@ module ParfitsHitchhiker (tests) where
     .*. distribution [  Accurate %= 0.99
                      ,Inaccurate %= 0.01
                      ]
-    .*. depends (when (is   Trustworthy .&. is   Accurate)   Ride
-             .|. when (is   Trustworthy .&. is Inaccurate) NoRide
-             .|. when (is Untrustworthy .&. is   Accurate) NoRide
-             .|. when (is Untrustworthy .&. is Inaccurate)   Ride)
-    .*. depends (when (is   Ride) City
-             .|. when (is NoRide) Desert)
-    .*. depends (when (is Trustworthy .&. is City)   Pay
-             .|. fallback                          NoPay)
-    .*. depends (when (is   Pay .&. is City) (Value $    -1000)
-             .|. when (is NoPay .&. is City) (Value          0)
-             .|. fallback                    (Value $ -1000000))
+    .*. choose (when (is   Trustworthy .&. is   Accurate)   Ride
+            .|. when (is   Trustworthy .&. is Inaccurate) NoRide
+            .|. when (is Untrustworthy .&. is   Accurate) NoRide
+            .|. when (is Untrustworthy .&. is Inaccurate)   Ride)
+    .*. choose (when (is   Ride) City
+            .|. when (is NoRide) Desert)
+    .*. choose (when (is Trustworthy .&. is City)   Pay
+            .|. elsewise                          NoPay)
+    .*. choose (when (is   Pay .&. is City) (Value $    -1000)
+            .|. when (is NoPay .&. is City) (Value          0)
+            .|. elsewise                    (Value $ -1000000))
 
   parfitsHitchhikerOf t = t TG.true utilityFunction parfitsHitchhiker
 
@@ -90,11 +90,9 @@ module ParfitsHitchhiker (tests) where
         UG.choices "Action" (UG.branches untypedParfitsHitchhiker) `shouldBe` ["NoPay", "Pay"]
       it "Typed graph should compile to the untyped graph" $
         TG.compile parfitsHitchhiker `shouldBe` untypedParfitsHitchhiker
-      it "EDT initially chooses to pay"      $ parfitsHitchhikerOf           T.edt    `shouldBe` (  Pay,   -1000.0)
-      it "EDT later chooses to no pay"       $ parfitsHitchhikerInTheCityOf  T.edt    `shouldBe` (NoPay,       0.0)
-      it "CDT initially chooses to no pay"   $ parfitsHitchhikerOf           T.cdt    `shouldBe` (NoPay, -990099.0)
-      it "CDT later still chooses to no pay" $ parfitsHitchhikerInTheCityOf  T.cdt    `shouldBe` (NoPay,       0.0)
-      it "FDT initially chooses to pay"      $ parfitsHitchhikerOf          (T.fdt p) `shouldBe` (  Pay,   -1000.0)
-      it "FDT later still chooses to pay"    $ parfitsHitchhikerInTheCityOf (T.fdt p) `shouldBe` (  Pay,   -1000.0)
-    where p :: Proxy Predisposition
-          p = Proxy
+      it "EDT initially chooses to pay"      $ parfitsHitchhikerOf           T.edt                  `shouldBe` (  Pay,   -1000.0)
+      it "EDT later chooses to no pay"       $ parfitsHitchhikerInTheCityOf  T.edt                  `shouldBe` (NoPay,       0.0)
+      it "CDT initially chooses to no pay"   $ parfitsHitchhikerOf           T.cdt                  `shouldBe` (NoPay, -990099.0)
+      it "CDT later still chooses to no pay" $ parfitsHitchhikerInTheCityOf  T.cdt                  `shouldBe` (NoPay,       0.0)
+      it "FDT initially chooses to pay"      $ parfitsHitchhikerOf          (T.fdt @Predisposition) `shouldBe` (  Pay,   -1000.0)
+      it "FDT later still chooses to pay"    $ parfitsHitchhikerInTheCityOf (T.fdt @Predisposition) `shouldBe` (  Pay,   -1000.0)

@@ -1,17 +1,49 @@
-{-# LANGUAGE DataKinds, TypeFamilies, TypeOperators, FlexibleInstances, FlexibleContexts
-           , MultiParamTypeClasses, FunctionalDependencies, UndecidableInstances, GADTs
-           , ScopedTypeVariables
+{-# LANGUAGE
+    DataKinds
+  , FlexibleContexts
+  , FlexibleInstances
+  , FunctionalDependencies
+  , GADTs
+  , MultiParamTypeClasses
+  , ScopedTypeVariables
+  , TypeFamilies
+  , TypeOperators
+  , UndecidableInstances
   #-}
 
-module DecisionTheory.TypedGraph where
+module DecisionTheory.TypedGraph
+  ( Labelable (..)
+  , Stateable (..)
+  , Guard
+  , Clause
+  , Graph
+  , E
+  , Compilable (..)
+  , Delete
+  , Nub
+  , Union
+  , Intersection
+  , Difference
+  , NoCircularity
+  , NoDuplicatedOutputs
+  , OutputShouldPrecedeInput
+  , AllInputsSatisfied
+  , (.&.)
+  , (.*.)
+  , (.|.)
+  , distribution
+  , choose
+  , when
+  , is
+  , elsewise
+  , true
+  ) where
 
   import Data.Data
 
   import DecisionTheory.Base
   import DecisionTheory.Probability
   import qualified DecisionTheory.Graph as U
-
-
 
 
   type family Delete a b where
@@ -96,29 +128,22 @@ module DecisionTheory.TypedGraph where
     (E a) .&. (E b) = E (a :&: b)
 
 
-
-
   data GuardedT a
-  data UnguardedT
   data DisjunctionT a b
 
   data Clause :: * -> * -> * where
     When      ::    Guard g ->          o -> Clause (GuardedT     g)   o
     (:|:)     :: Clause c o -> Clause d o -> Clause (DisjunctionT c d) o
-    Otherwise ::                        o -> Clause  UnguardedT        o
 
   instance (Eq (Guard g), Eq o) => Eq (Clause (GuardedT g) o) where
     (When c a) == (When d b) = (c == d) && (a == b)
   instance (Eq (Clause c o), Eq (Clause d o)) => Eq (Clause (DisjunctionT c d) o) where
     (a :|: b) == (c :|: d) = (a == c) && (b == d)
-  instance Eq o => Eq (Clause UnguardedT o) where
-    Otherwise a == Otherwise b = a == b
   instance (Show (Guard g), Show o) => Show (Clause (GuardedT g) o) where
-    show (When c o) = "when (" ++ show c ++ ") " ++ show o
+    show (When GTrue o) = "elsewise (" ++ show o ++ ")"
+    show (When c     o) = "when (" ++ show c ++ ") " ++ show o
   instance (Show (Clause c o), Show (Clause d o), Show o) => Show (Clause (DisjunctionT c d) o) where
     show (a :|: b) = show a ++ " .|. " ++ show b
-  instance (Show o) => Show (Clause UnguardedT o) where
-    show (Otherwise o) = "fallback " ++ show o
 
   class NoCircularity (io :: [*])
   instance NoCircularity '[]
@@ -130,8 +155,8 @@ module DecisionTheory.TypedGraph where
   infixr 5 .|.
   E c .|. E d = E (c :|: d)
 
-  fallback :: o -> E '[] '[o] (Clause UnguardedT o)
-  fallback a = E (Otherwise a)
+  elsewise :: o -> E '[] '[o] (Clause (GuardedT TrueT) o)
+  elsewise a = when true a
 
 
 
@@ -151,7 +176,7 @@ module DecisionTheory.TypedGraph where
   instance Show o => Show (Graph (DistributionT o)) where
     show (Distribution ps) = "distribution " ++ show ps
   instance Show (Clause c o) => Show (Graph (ConditionalT (Clause c o))) where
-    show (Case a) = "depends (" ++ show a ++ ")"
+    show (Case a) = "choose (" ++ show a ++ ")"
   instance Show o => Show (Graph (AlwaysT o)) where
     show (Always a) = "always " ++ show a
   instance (Show (Graph a), Show (Graph b)) => Show (Graph (AppendT a b)) where
@@ -172,8 +197,8 @@ module DecisionTheory.TypedGraph where
   always :: forall o. o -> E '[] '[o] (Graph (AlwaysT o))
   always o = E (Always o)
 
-  depends :: forall o i c. E i '[o] (Clause c o) -> E i '[o] (Graph (ConditionalT (Clause c o)))
-  depends (E c) = E (Case c)
+  choose :: forall o i c. E i '[o] (Clause c o) -> E i '[o] (Graph (ConditionalT (Clause c o)))
+  choose (E c) = E (Case c)
 
   class NoDuplicatedOutputs (o :: [*])
   instance NoDuplicatedOutputs '[]
@@ -181,7 +206,12 @@ module DecisionTheory.TypedGraph where
   class OutputShouldPrecedeInput (o :: [*])
   instance OutputShouldPrecedeInput '[]
 
-  (.*.) :: (NoDuplicatedOutputs (Intersection '[o] p), OutputShouldPrecedeInput (Intersection i p)) => E i '[o] (Graph g) -> E j p (Graph h) -> E (Union i (Difference j '[o])) (Union '[o] p)  (Graph (AppendT g h))
+  (.*.) :: ( NoDuplicatedOutputs (Intersection '[o] p)
+           , OutputShouldPrecedeInput (Intersection i p)
+           )
+           => E i '[o] (Graph g)
+           -> E j p (Graph h)
+           -> E (Union i (Difference j '[o])) (Union '[o] p)  (Graph (AppendT g h))
   infixr 3 .*.
   E g .*. E h = E (g :*: h)
 
@@ -224,8 +254,6 @@ module DecisionTheory.TypedGraph where
   instance (NodeValue (Graph a) c, NodeValue (Graph b) c) => NodeValue (Graph (AppendT a b)) c where
     nodeValue (a :*: _) = nodeValue a
 
-  instance NodeValue (Clause UnguardedT v) v where
-    nodeValue (Otherwise v) = v
   instance (NodeValue (Clause a v) v, NodeValue (Clause b v) v) => NodeValue (Clause (DisjunctionT a b) v) v where
     nodeValue (a :|: _) = nodeValue a
   instance NodeValue (Clause (GuardedT a) v) v where
@@ -246,8 +274,6 @@ module DecisionTheory.TypedGraph where
   instance (Compilable (Graph a) (U.Graph U.Stochastic), Compilable (Graph b) (U.Graph U.Stochastic)) => Compilable (Graph (AppendT a b)) (U.Graph U.Stochastic) where
     compile (a :*: b) = U.Graph ((U.unGraph . compile) a ++ (U.unGraph . compile) b)
 
-  instance Stateable v => Compilable (Clause UnguardedT v) [U.Clause] where
-    compile (Otherwise v) = [U.Clause [] (toState v)]
   instance (Compilable (Clause a v) [U.Clause], Compilable (Clause b v) [U.Clause], Stateable v) => Compilable (Clause (DisjunctionT a b) v) [U.Clause] where
     compile (a :|: b) = compile a ++ compile b
   instance (Compilable (Guard g) [U.Guard], Stateable v) => Compilable (Clause (GuardedT g) v) [U.Clause] where

@@ -1,6 +1,26 @@
-{-# LANGUAGE EmptyDataDecls, GADTs, StandaloneDeriving #-}
+{-# LANGUAGE
+    EmptyDataDecls
+  , GADTs
+  , StandaloneDeriving
+  , ViewPatterns
+  #-}
 
-module DecisionTheory.Graph where
+module DecisionTheory.Graph
+  ( Node (..)
+  , Guard (..)
+  , Clause (..)
+  , clauseValue
+  , Graph (..)
+  , unGraph
+  , Deterministic
+  , Stochastic
+  , choices
+  , mapBranches
+  , branches
+  , find
+  , probabilities
+  , replaceG
+  ) where
 
   import qualified Data.List as L
   import qualified Data.Maybe as M
@@ -15,6 +35,8 @@ module DecisionTheory.Graph where
      Always :: State -> Node a
      Distribution :: [Probability State] -> Node Stochastic
      Conditional :: [Clause] -> Node a
+  deriving instance Eq (Node a)
+  deriving instance Show (Node a)
 
   data Guard = Guard Label State
     deriving (Eq, Show)
@@ -24,9 +46,6 @@ module DecisionTheory.Graph where
 
   clauseValue :: Clause -> State
   clauseValue (Clause _ v) = v
-
-  deriving instance Eq (Node a)
-  deriving instance Show (Node a)
 
   {- HLINT ignore Graph -}
   data Graph a = Graph [Labeled (Node a)]
@@ -57,7 +76,7 @@ module DecisionTheory.Graph where
 
   probabilities :: Label -> [Probability (Graph Deterministic)] -> [Probability State]
   probabilities l = squash (when (==)) . M.mapMaybe find'
-    where find' (Probability g p) = fmap (flip Probability p) (find l g)
+    where find' (unProbability -> (g, p)) = fmap (flip (%=) p) (find l g)
           when :: (a -> a -> Bool) -> (a -> a -> Maybe a)
           when (==) a1 a2 | a1 == a2  = Just a1
                           | otherwise = Nothing
@@ -68,7 +87,7 @@ module DecisionTheory.Graph where
   branches :: Graph Stochastic -> [Probability (Graph Deterministic)]
   branches (Graph ls) = filter ((>0) . snd . unProbability) $ loop ls
     where prepend l = fmap $ \(Graph ls) -> Graph (l:ls)
-          loop []                                 = [Probability (Graph []) 1.0]
+          loop []                                 = [(Graph []) %= 1.0]
           loop (Labeled l (Always a)        : ls) = map (prepend (Labeled l (Always a)))      $ loop ls
           loop (Labeled l (Conditional c)   : ls) = map (prepend (Labeled l (Conditional c))) $ loop ls
           loop (Labeled l (Distribution ps) : ls) = [branch l pa pb | pa <- ps, pb <- loop ls]
