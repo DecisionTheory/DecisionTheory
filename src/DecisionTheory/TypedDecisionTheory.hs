@@ -9,7 +9,8 @@
   #-}
 
 module DecisionTheory.TypedDecisionTheory
-  ( dt
+  ( Solutions
+  , dt
   , edt
   , cdt
   , fdt
@@ -35,6 +36,7 @@ module DecisionTheory.TypedDecisionTheory
   type Decidable  a v p pi g gi go = ( Compilable a v p g gi go
                                      , TG.AllInputsSatisfied (TG.Difference pi go)
                                      )
+  type Solutions a = [(a, DT.Utility)]
 
   dt :: forall a v p pi po g gi go.
           Decidable a v p pi g gi go
@@ -42,8 +44,8 @@ module DecisionTheory.TypedDecisionTheory
           -> TG.E pi po (TG.Guard p)
           -> (v -> DT.Utility)
           -> TG.E gi go (TG.Graph g)
-          -> (a, DT.Utility)
-  dt h gs uf g = result $ DT.dt h guards search graph
+          -> Solutions a
+  dt h gs uf g = map result $ DT.dt h guards search graph
     where guards        = TG.compile gs
           search        = DT.Search (uf . fromJust . TG.ofState) (TG.toLabel (undefined :: a)) (TG.toLabel (undefined :: v))
           graph         = TG.compile g
@@ -56,7 +58,7 @@ module DecisionTheory.TypedDecisionTheory
            => TG.E pi po (TG.Guard p)
            -> (v -> DT.Utility)
            -> TG.E gi go (TG.Graph g)
-           -> (a, DT.Utility)
+           -> Solutions a
   edt = dt DT.condition
 
   cdt :: forall a v p pi po g gi go.
@@ -64,7 +66,7 @@ module DecisionTheory.TypedDecisionTheory
            => TG.E pi po (TG.Guard p)
            -> (v -> DT.Utility)
            -> TG.E gi go (TG.Graph g)
-           -> (a, DT.Utility)
+           -> Solutions a
   cdt = dt DT.intervene
 
   class ValidInterventionNode (i :: [*])
@@ -78,5 +80,5 @@ module DecisionTheory.TypedDecisionTheory
            => TG.E pi po (TG.Guard p)
            -> (v -> DT.Utility)
            -> TG.E gi go (TG.Graph g)
-           -> (a, DT.Utility)
+           -> Solutions a
   fdt = dt $ DT.counterFactualize $ TG.toLabel $ (undefined :: t)

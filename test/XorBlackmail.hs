@@ -90,6 +90,6 @@ module XorBlackmail (tests) where
         UG.choices "Action" (UG.branches untypedXorBlackmail) `shouldBe` ["Pay", "Refuse"]
       it "Typed graph should compile to the untyped graph" $ do
         TG.compile xorBlackmail `shouldBe` untypedXorBlackmail
-      it "EDT chooses to pay"    $ xorBlackmailOf  T.edt                  `shouldBe` (Pay,       -1000.0)
-      it "CDT chooses to refuse" $ xorBlackmailOf  T.cdt                  `shouldBe` (Refuse, -1000000.0)
-      it "FDT chooses to refuse" $ xorBlackmailOf (T.fdt @Predisposition) `shouldBe` (Refuse, -1000000.0)
+      it "EDT chooses to pay"    $ xorBlackmailOf  T.edt                  `shouldBe` [(Pay,       -1000.0)]
+      it "CDT chooses to refuse" $ xorBlackmailOf  T.cdt                  `shouldBe` [(Refuse, -1000000.0)]
+      it "FDT chooses to refuse" $ xorBlackmailOf (T.fdt @Predisposition) `shouldBe` [(Refuse, -1000000.0)]
