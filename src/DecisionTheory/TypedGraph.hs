@@ -1,5 +1,6 @@
 {-# LANGUAGE
-    DataKinds
+    AllowAmbiguousTypes
+  , DataKinds
   , FlexibleContexts
   , FlexibleInstances
   , FunctionalDependencies
@@ -13,6 +14,7 @@
 
 module DecisionTheory.TypedGraph
   ( Labelable (..)
+  , label
   , Stateable (..)
   , Guard
   , Clause
@@ -229,6 +231,9 @@ module DecisionTheory.TypedGraph
 
   class Labelable a where
     toLabel :: a -> Label
+
+  label :: forall a. (Labelable a) => Label
+  label = toLabel (undefined :: a)
 
   instance {-# OVERLAPPABLE #-} Typeable a => Labelable a where
     toLabel = typeToLabel . typeOf
