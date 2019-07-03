@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings, DeriveDataTypeable #-}
+{-# LANGUAGE OverloadedStrings, DeriveDataTypeable, TypeApplications #-}
 {-# OPTIONS_GHC -fno-warn-missing-signatures #-}
 {- HLINT ignore "Redundant do" -}
 
@@ -83,8 +83,7 @@ module DeathInDamascus (tests) where
         UG.choices "Action" (UG.branches untypedDeathInDamascus) `shouldBe` ["Flee", "Stay"]
       it "Typed graph should compile to the untyped graph" $
         TG.compile deathInDamascus `shouldBe` untypedDeathInDamascus
-      it "CDT's choice alternates between stay and flee" $ do
-        U.unstableDT U.intervene [UG.Guard "Action" "Stay"] U.stdSearch untypedDeathInDamascus `shouldBe` ("Flee", 999.0)
-        U.unstableDT U.intervene [UG.Guard "Action" "Flee"] U.stdSearch untypedDeathInDamascus `shouldBe` ("Stay", 1000.0)
-      it "EDT chooses to stay" $ deathInDamascusOf  T.edt                  `shouldBe` (Stay, 0.0)
-      it "FDT chooses to stay" $ deathInDamascusOf (T.fdt @Predisposition) `shouldBe` (Stay, 0.0)
+      it "CDT's chooses to both stay and flee" $
+                                 deathInDamascusOf  T.cdt                  `shouldBe` [(Flee, 999.0), (Stay, 1000.0)]
+      it "EDT chooses to stay" $ deathInDamascusOf  T.edt                  `shouldBe` [(Stay, 0.0)]
+      it "FDT chooses to stay" $ deathInDamascusOf (T.fdt @Predisposition) `shouldBe` [(Stay, 0.0)]

@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings, DeriveDataTypeable, DataKinds, FlexibleContexts, TypeApplications #-}
+{-# LANGUAGE OverloadedStrings, DeriveDataTypeable, TypeApplications #-}
 {-# OPTIONS_GHC -fno-warn-missing-signatures #-}
 {- HLINT ignore "Redundant do" -}
 
@@ -115,12 +115,12 @@ module Newcomb (tests) where
         UG.choices "Action" (UG.branches untypedNewcomb) `shouldBe` ["Onebox", "Twobox"]
       it "Typed graph should compile to the untyped graph" $
         TG.compile newcomb `shouldBe` untypedNewcomb
-      it "EDT chooses to onebox" $ newcombOf  T.edt                  `shouldBe` (Onebox, 990000.0)
-      it "CDT chooses to twobox" $ newcombOf  T.cdt                  `shouldBe` (Twobox,  11000.0)
-      it "FDT chooses to onebox" $ newcombOf (T.fdt @Predisposition) `shouldBe` (Onebox, 990000.0)
+      it "EDT chooses to onebox" $ newcombOf  T.edt                  `shouldBe` [(Onebox, 990000.0)]
+      it "CDT chooses to twobox" $ newcombOf  T.cdt                  `shouldBe` [(Twobox,  11000.0)]
+      it "FDT chooses to onebox" $ newcombOf (T.fdt @Predisposition) `shouldBe` [(Onebox, 990000.0)]
       it "FDT chooses to onebox even with transparency" $
-        T.fdt @Predisposition (is Full) utilityFunction newcomb      `shouldBe` (Onebox, 1000000.0)
+        T.fdt @Predisposition (is Full) utilityFunction newcomb      `shouldBe` [(Onebox, 1000000.0)]
       it "FDT chooses to twobox when Omega prediction is unreliable" $
-        U.fdt "Predisposition" [] U.stdSearch unreliableNewcomb      `shouldBe` ("Twobox", 501000.0)
+        U.fdt "Predisposition" [] U.stdSearch unreliableNewcomb      `shouldBe` [("Twobox", 501000.0)]
       it "FDT chooses to onebox when Omega prediction is less unreliable" $
-        U.fdt "Predisposition" [] U.stdSearch lessUnreliableNewcomb  `shouldBe` ("Onebox", 510000.0)
+        U.fdt "Predisposition" [] U.stdSearch lessUnreliableNewcomb  `shouldBe` [("Onebox", 510000.0)]

@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings, DeriveDataTypeable #-}
+{-# LANGUAGE OverloadedStrings, DeriveDataTypeable, TypeApplications #-}
 {-# OPTIONS_GHC -fno-warn-missing-signatures #-}
 {- HLINT ignore "Redundant do" -}
 
@@ -90,9 +90,9 @@ module ParfitsHitchhiker (tests) where
         UG.choices "Action" (UG.branches untypedParfitsHitchhiker) `shouldBe` ["NoPay", "Pay"]
       it "Typed graph should compile to the untyped graph" $
         TG.compile parfitsHitchhiker `shouldBe` untypedParfitsHitchhiker
-      it "EDT initially chooses to pay"      $ parfitsHitchhikerOf           T.edt                  `shouldBe` (  Pay,   -1000.0)
-      it "EDT later chooses to no pay"       $ parfitsHitchhikerInTheCityOf  T.edt                  `shouldBe` (NoPay,       0.0)
-      it "CDT initially chooses to no pay"   $ parfitsHitchhikerOf           T.cdt                  `shouldBe` (NoPay, -990099.0)
-      it "CDT later still chooses to no pay" $ parfitsHitchhikerInTheCityOf  T.cdt                  `shouldBe` (NoPay,       0.0)
-      it "FDT initially chooses to pay"      $ parfitsHitchhikerOf          (T.fdt @Predisposition) `shouldBe` (  Pay,   -1000.0)
-      it "FDT later still chooses to pay"    $ parfitsHitchhikerInTheCityOf (T.fdt @Predisposition) `shouldBe` (  Pay,   -1000.0)
+      it "EDT initially chooses to pay"      $ parfitsHitchhikerOf           T.edt                  `shouldBe` [(  Pay,   -1000.0)]
+      it "EDT later chooses to no pay"       $ parfitsHitchhikerInTheCityOf  T.edt                  `shouldBe` [(NoPay,       0.0)]
+      it "CDT initially chooses to no pay"   $ parfitsHitchhikerOf           T.cdt                  `shouldBe` [(NoPay, -990099.0)]
+      it "CDT later still chooses to no pay" $ parfitsHitchhikerInTheCityOf  T.cdt                  `shouldBe` [(NoPay,       0.0)]
+      it "FDT initially chooses to pay"      $ parfitsHitchhikerOf          (T.fdt @Predisposition) `shouldBe` [(  Pay,   -1000.0)]
+      it "FDT later still chooses to pay"    $ parfitsHitchhikerInTheCityOf (T.fdt @Predisposition) `shouldBe` [(  Pay,   -1000.0)]

@@ -7,8 +7,8 @@ module DecisionTheory.DecisionTheory
   , Search (..)
   , stdSearch
   , Hypothesis
+  , Solutions
   , condition
-  , unstableDT
   , dt
   , edt
   , intervene
@@ -37,8 +37,11 @@ module DecisionTheory.DecisionTheory
     where uf (State s) = Utility $ read s
 
   type Hypothesis = (Guard -> Endo [Probability (Graph Deterministic)])
+  type Solution = (State, Utility)
+  type Solutions = [Solution]
 
-  unstableDT :: Foldable t => Hypothesis -> t Guard -> Search -> Graph Stochastic -> (State, Utility)
+
+  unstableDT :: Foldable f => Hypothesis -> f Guard -> Search -> Graph Stochastic -> Solution
   unstableDT hypothesis gs (Search uf a o) g = L.maximumBy (comparing snd) . map expectation $ hypotheticals
     where hypotheticals :: [(State, [Probability (Graph Deterministic)])]
           hypotheticals = M.mapMaybe (hypothetical.conclusion) $ choices a $ branches g
@@ -48,24 +51,27 @@ module DecisionTheory.DecisionTheory
           possibleBranches = foldl (flip condition) (branches g) gs
           expectedValue :: Probability (Graph Deterministic) -> Utility
           expectedValue (unProbability -> (g, v)) = ((* fromRational v) . uf) $ M.fromJust $ find o g
-          expectation :: (State, [Probability (Graph Deterministic)]) -> (State, Utility)
+          expectation :: (State, [Probability (Graph Deterministic)]) -> Solution
           expectation (v, ps) = (v, sum $ map expectedValue ps)
 
-  dt :: Foldable t => Hypothesis -> t Guard -> Search -> Graph Stochastic -> (State, Utility)
-  dt hypothesis gs s@(Search _ a _) g | fst decision == fst dominance = decision
-                                      | otherwise                     = error ("OMG! " ++ show dominance ++ " /= " ++ show decision)
-    where decision :: (State, Utility)
-          decision = unstableDT hypothesis (Guard a (fst dominance) : toList gs) s g
-          dominance :: (State, Utility)
-          dominance = unstableDT hypothesis gs s g
+  dt :: Foldable f => Hypothesis -> f Guard -> Search -> Graph Stochastic -> Solutions
+  dt hypothesis gs s@(Search _ a _) g = let s = solve gs
+                                         in reverse $ loop s []
+    where loop :: Solution -> Solutions -> Solutions
+          loop s@(v, _) ss = let s' = solve (guard v)
+                             in if s' `elem` ss then ss else loop s' (s':ss)
+          guard :: State -> [Guard]
+          guard v = (Guard a v : toList gs)
+          solve :: Foldable f => f Guard -> Solution
+          solve gs = unstableDT hypothesis gs s g
 
-  edt :: Foldable t => t Guard -> Search -> Graph Stochastic -> (State, Utility)
+  edt :: Foldable f => f Guard -> Search -> Graph Stochastic -> Solutions
   edt = dt condition
 
-  cdt :: [Guard] -> Search -> Graph Stochastic -> (State, Utility)
+  cdt :: [Guard] -> Search -> Graph Stochastic -> Solutions
   cdt = dt intervene
 
-  fdt :: Foldable t => Label -> t Guard -> Search -> Graph Stochastic -> (State, Utility)
+  fdt :: Foldable f => Label -> f Guard -> Search -> Graph Stochastic -> Solutions
   fdt = dt . counterFactualize
 
   condition :: Hypothesis
