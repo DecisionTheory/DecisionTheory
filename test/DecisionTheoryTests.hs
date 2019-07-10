@@ -31,7 +31,7 @@ module DecisionTheoryTests (tests) where
                           ,Clause [Guard "a" "a2", Guard "b" "b1"] "c3"
                           ,Clause [Guard "a" "a2", Guard "b" "b2"] "c4"
                           ]
-  weirdBranches :: [Probability (Graph Deterministic)]
+  weirdBranches :: [Branch]
   weirdBranches = [(Graph [Labeled "a" (Always "a1")
                           ,Labeled "b" (Conditional [Clause [Guard "a" "a1"] "b1",Clause [Guard "a" "a2"] "b2"])
                           ,Labeled "c" (Conditional [Clause [Guard "a" "a1",Guard "b" "b1"] "c1",Clause [Guard "a" "a1",Guard "b" "b2"] "c2",Clause [Guard "a" "a2",Guard "b" "b1"] "c3",Clause [Guard "a" "a2",Guard "b" "b2"] "c4"])
@@ -53,7 +53,7 @@ module DecisionTheoryTests (tests) where
                                              ]
                  ]
 
-  simpleBranches :: [Probability (Graph Deterministic)]
+  simpleBranches :: [Branch]
   simpleBranches = [(Graph [Labeled "a" (Always "a1"),Labeled "b" (Always "b1")]) %= 0.03
                    ,(Graph [Labeled "a" (Always "a1"),Labeled "b" (Always "b2")]) %= 0.07
                    ,(Graph [Labeled "a" (Always "a2"),Labeled "b" (Always "b1")]) %= 0.27

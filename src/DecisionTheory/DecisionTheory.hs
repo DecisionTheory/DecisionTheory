@@ -7,6 +7,8 @@ module DecisionTheory.DecisionTheory
   , Search (..)
   , stdSearch
   , Hypothesis
+  , Decision (..)
+  , Solution
   , Solutions
   , condition
   , dt
@@ -36,30 +38,47 @@ module DecisionTheory.DecisionTheory
   stdSearch = Search uf (Label "Action") (Label "Value")
     where uf (State s) = Utility $ read s
 
-  type Hypothesis = (Guard -> Endo [Probability (Graph Deterministic)])
-  type Solution = (State, Utility)
+  type Hypothesis = (Guard -> Endo [Branch])
+  data Decision a = Decision State a deriving (Eq, Show)
+  instance Ord a => Ord (Decision a) where
+    Decision s1 a1 <= Decision s2 a2 = (a1, s1) <= (a2, s2)
+  instance Functor Decision where
+    fmap f (Decision s a) = Decision s (f a)
+  decide :: (State -> a) -> (State -> Decision a)
+  decide f s = Decision s (f s)
+
+  consequence :: Decision a -> a
+  consequence (Decision _ a) = a
+
+  type Solution = Decision Utility
   type Solutions = [Solution]
 
-
   unstableDT :: Foldable f => Hypothesis -> f Guard -> Search -> Graph Stochastic -> Solution
-  unstableDT hypothesis gs (Search uf a o) g = L.maximumBy (comparing snd) . map expectation $ hypotheticals
-    where hypotheticals :: [(State, [Probability (Graph Deterministic)])]
-          hypotheticals = M.mapMaybe (hypothetical.conclusion) $ choices a $ branches g
-          hypothetical (_, []) = Nothing
-          hypothetical c       = Just c
-          conclusion v = (v, hypothesis (Guard a v) possibleBranches)
+  unstableDT hypothesis gs search@(Search uf a o) g = decision $ hypotheticals $ possibleActions
+    where possibleActions = choices a $ branches g
           possibleBranches = foldl (flip condition) (branches g) gs
-          expectedValue :: Probability (Graph Deterministic) -> Utility
-          expectedValue (unProbability -> (g, v)) = ((* fromRational v) . uf) $ M.fromJust $ find o g
-          expectation :: (State, [Probability (Graph Deterministic)]) -> Solution
-          expectation (v, ps) = (v, sum $ map expectedValue ps)
+          hypotheticals :: [State] -> [Decision [Branch]]
+          hypotheticals = filter (not.null.consequence) . map (decide simulation)
+          simulation :: State -> [Branch]
+          simulation s = hypothesis (Guard a s) possibleBranches
+          decision :: [Decision [Branch]] -> Solution
+          decision = L.maximum . map (fmap (sum . map (branchUtility search)))
+
+  branchUtility :: Search -> Branch -> Utility
+  branchUtility search = expectedValue . fmap (outcomeUtility search)
+
+  outcomeUtility :: Search -> Graph Deterministic -> Utility
+  outcomeUtility (Search uf _ o) = uf . M.fromJust . find o
+
+  expectedValue :: Probability Utility -> Utility
+  expectedValue (unProbability -> (a, p)) = a * fromRational p
 
   dt :: Foldable f => Hypothesis -> f Guard -> Search -> Graph Stochastic -> Solutions
   dt hypothesis gs s@(Search _ a _) g = let s = solve gs
                                          in reverse $ loop s []
     where loop :: Solution -> Solutions -> Solutions
-          loop s@(v, _) ss = let s' = solve (guard v)
-                             in if s' `elem` ss then ss else loop s' (s':ss)
+          loop s@(Decision v _) ss = let s' = solve (guard v)
+                                     in if s' `elem` ss then ss else loop s' (s':ss)
           guard :: State -> [Guard]
           guard v = (Guard a v : toList gs)
           solve :: Foldable f => f Guard -> Solution

@@ -17,8 +17,8 @@ module Newcomb (tests) where
   import DecisionTheory.TypedGraph(distribution, choose, when, is, elsewise, (.*.), (.|.), (.&.))
 
   untypedNewcomb :: UG.Graph UG.Stochastic
-  untypedNewcomb = UG.Graph [Labeled "Predisposition" predisposition
-                            ,Labeled "Accuracy"       accuracy
+  untypedNewcomb = UG.Graph [Labeled "Accuracy"       accuracy
+                            ,Labeled "Predisposition" predisposition
                             ,Labeled "Action"         action
                             ,Labeled "Prediction"     prediction
                             ,Labeled "BoxB"           box_b
@@ -68,13 +68,10 @@ module Newcomb (tests) where
   utilityFunction :: Value -> U.Utility
   utilityFunction (Value v) = fromIntegral v
 
-  newcomb =
+  partial =
         distribution @Predisposition [Oneboxer %= 0.5
                                      ,Twoboxer %= 0.5
                                      ]
-    .*. distribution @Accuracy [  Accurate %= 0.99
-                               ,Inaccurate %= 0.01
-                               ]
     .*. choose @Action     (when (is Oneboxer) Onebox
                         .|. when (is Twoboxer) Twobox)
     .*. choose @Prediction (when (is Oneboxer .&. is   Accurate) P1
@@ -91,22 +88,24 @@ module Newcomb (tests) where
                         .|. when (is F2) (Value 1001000)
                         .|. when (is E1) (Value       0)
                         .|. when (is E2) (Value    1000))
+  newcomb =
+        distribution @Accuracy [  Accurate %= 0.99
+                               ,Inaccurate %= 0.01
+                               ]
+    .*. partial
 
   newcombOf t = t TG.true utilityFunction newcomb
 
-  unreliableNewcomb :: UG.Graph UG.Stochastic
-  unreliableNewcomb = UG.replaceG unreliability untypedNewcomb
-    where unreliability ln@(Labeled l _) | l == "Accuracy" = Labeled l $ UG.Distribution [  "Accurate" %= 0.5
-                                                                                         ,"Inaccurate" %= 0.5
-                                                                                         ]
-                                         | otherwise       = ln
-
-  lessUnreliableNewcomb :: UG.Graph UG.Stochastic
-  lessUnreliableNewcomb = UG.replaceG lesserUnreliability untypedNewcomb
-    where lesserUnreliability ln@(Labeled l _) | l == "Accuracy" = Labeled l $ UG.Distribution [  "Accurate" %= 0.51
-                                                                                               ,"Inaccurate" %= 0.49
-                                                                                               ]
-                                               | otherwise       = ln
+  unreliableNewcomb =
+        distribution @Accuracy [  Accurate %= 0.5
+                               ,Inaccurate %= 0.5
+                               ]
+    .*. partial
+  lessUnreliableNewcomb =
+        distribution @Accuracy [  Accurate %= 0.51
+                               ,Inaccurate %= 0.49
+                               ]
+    .*. partial
 
   tests :: IO ()
   tests = hspec $
@@ -121,6 +120,6 @@ module Newcomb (tests) where
       it "FDT chooses to onebox even with transparency" $
         T.fdt @Predisposition (is Full) utilityFunction newcomb      `shouldBe` [(Onebox, 1000000.0)]
       it "FDT chooses to twobox when Omega prediction is unreliable" $
-        U.fdt "Predisposition" [] U.stdSearch unreliableNewcomb      `shouldBe` [("Twobox", 501000.0)]
+        T.fdt @Predisposition TG.true utilityFunction unreliableNewcomb      `shouldBe` [(Twobox, 501000.0)]
       it "FDT chooses to onebox when Omega prediction is less unreliable" $
-        U.fdt "Predisposition" [] U.stdSearch lessUnreliableNewcomb  `shouldBe` [("Onebox", 510000.0)]
+        T.fdt @Predisposition TG.true utilityFunction lessUnreliableNewcomb  `shouldBe` [(Onebox, 510000.0)]

@@ -6,6 +6,7 @@
   , KindSignatures
   , MonoLocalBinds
   , ScopedTypeVariables
+  , TypeApplications
   #-}
 
 module DecisionTheory.TypedDecisionTheory
@@ -46,11 +47,11 @@ module DecisionTheory.TypedDecisionTheory
           -> TG.E gi go (TG.Graph g)
           -> Solutions a
   dt h gs uf g = map result $ DT.dt h guards search graph
-    where guards        = TG.compile gs
-          search        = DT.Search (uf . fromJust . TG.ofState) (TG.toLabel (undefined :: a)) (TG.toLabel (undefined :: v))
-          graph         = TG.compile g
-          result        :: (B.State, DT.Utility) -> (a, DT.Utility)
-          result (s, u) = (fromJust $ TG.ofState s, u)
+    where guards = TG.compile gs
+          search = DT.Search (uf . fromJust . TG.ofState) (TG.label @a) (TG.label @v)
+          graph  = TG.compile g
+          result :: DT.Solution -> (a, DT.Utility)
+          result (DT.Decision s u) = (fromJust $ TG.ofState s, u)
 
 
   edt :: forall a v p pi po g gi go.
@@ -81,4 +82,4 @@ module DecisionTheory.TypedDecisionTheory
            -> (v -> DT.Utility)
            -> TG.E gi go (TG.Graph g)
            -> Solutions a
-  fdt = dt $ DT.counterFactualize $ TG.toLabel $ (undefined :: t)
+  fdt = dt $ DT.counterFactualize $ TG.label @t

@@ -15,6 +15,7 @@ module DecisionTheory.Graph
   , Deterministic
   , Stochastic
   , choices
+  , Branch
   , mapBranches
   , branches
   , find
@@ -74,17 +75,19 @@ module DecisionTheory.Graph
           clauseMatches (Clause gs _) = all guardMatches gs
           guardMatches (Guard l' v) = find l' g == Just v
 
-  probabilities :: Label -> [Probability (Graph Deterministic)] -> [Probability State]
+  type Branch = Probability (Graph Deterministic)
+
+  probabilities :: Label -> [Branch] -> [Probability State]
   probabilities l = squash (when (==)) . M.mapMaybe find'
     where find' (unProbability -> (g, p)) = fmap (flip (%=) p) (find l g)
           when :: (a -> a -> Bool) -> (a -> a -> Maybe a)
           when (==) a1 a2 | a1 == a2  = Just a1
                           | otherwise = Nothing
 
-  choices :: Label -> [Probability (Graph Deterministic)] -> [State]
+  choices :: Label -> [Branch] -> [State]
   choices l = map probabilityElement . probabilities l
 
-  branches :: Graph Stochastic -> [Probability (Graph Deterministic)]
+  branches :: Graph Stochastic -> [Branch]
   branches (Graph ls) = filter ((>0) . snd . unProbability) $ loop ls
     where prepend l = fmap $ \(Graph ls) -> Graph (l:ls)
           loop []                                 = [(Graph []) %= 1.0]
