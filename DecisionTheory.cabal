@@ -1,10 +1,4 @@
-cabal-version: 1.12
-
--- This file has been generated from package.yaml by hpack version 0.31.2.
---
--- see: https://github.com/sol/hpack
---
--- hash: b8f21c0a6654662aee07178d153e3a1ebc3d58c4a298be721bdf60dc6191b837
+cabal-version: 3.0
 
 name:           DecisionTheory
 version:        0.1.0.0
@@ -33,12 +27,15 @@ library
       DecisionTheory.Probability
       DecisionTheory.TypedDecisionTheory
       DecisionTheory.TypedGraph
+      DecisionTheory.TypedGraph2
   other-modules:
       Paths_DecisionTheory
   hs-source-dirs:
       src
   build-depends:
-      base >=4.7 && <5
+      base >=4.7 && <5, HList
+  ghc-options:
+      -Wall
   default-language: Haskell2010
 
 test-suite DecisionTheory-test
