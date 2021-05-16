@@ -1,9 +1,13 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE ImportQualifiedPost #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
@@ -17,19 +21,24 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# OPTIONS_GHC -Wall #-}
 
-module DecisionTheory.TypedGraph2 where
+module DecisionTheory.V2.TypedGraph
+  ( module DecisionTheory.V2.TypedGraph,
+    HList (..),
+  )
+where
 
 import Data.Data (Data, Proxy (Proxy))
 import Data.Data qualified as Data
-import Data.HList.HList (HList (..))
 import Data.Kind (Constraint, Type)
 import DecisionTheory.Base (Label (..), Labeled (..), State (..))
-import DecisionTheory.EnumHList (EnumerateHList (..))
 import DecisionTheory.Graph qualified as U
 import DecisionTheory.Probability (Probability, (%=))
-import DecisionTheory.TypeSet (Disjoint, NotElem, SetDifference, SubsetOf, TypeSet, Union, type (++), Elem)
+import DecisionTheory.V2.HList (EnumerateHList (..), HList (..))
+import DecisionTheory.V2.TypeSet (Disjoint, NotElem, SetDifference, TypeSet, Union)
 import GHC.TypeLits (ErrorMessage (..))
+import Text.Read (readMaybe)
 
 type Always :: Type -> Type
 newtype Always outcome = Always outcome
@@ -82,21 +91,22 @@ type ValidGraphNode inputs outcome =
 
 type AllOutcomes :: GraphShape -> [Type]
 type family AllOutcomes shape where
-  AllOutcomes (N _ outcome) = '[outcome]
-  AllOutcomes (left :*: right) = Union (AllOutcomes left) (AllOutcomes right)
+  AllOutcomes ('N _ outcome) = '[outcome]
+  AllOutcomes (left ':*: right) = Union (AllOutcomes left) (AllOutcomes right)
 
 type OpenInputs :: GraphShape -> [Type]
 type family OpenInputs shape where
-  OpenInputs (N inputs _) = inputs
-  OpenInputs (left :*: right) = Union (OpenInputs left) (SetDifference (OpenInputs right) (AllOutcomes left))
+  OpenInputs ('N inputs _) = inputs
+  OpenInputs (left ':*: right) = Union (OpenInputs left) (SetDifference (OpenInputs right) (AllOutcomes left))
 
 type MayConcatGraphs inputs1 outcomes1 inputs2 outcomes2 =
   ( Disjoint (NoDuplicatedOutcomesInGraph outcomes1 outcomes2) outcomes1 outcomes2,
     Disjoint (OutcomeShouldPrecedeInput inputs1 outcomes2) outcomes2 inputs1
   )
 
-data GraphShape =
-  N [Type] Type | (:*:) GraphShape GraphShape
+data GraphShape
+  = N [Type] Type
+  | (:*:) GraphShape GraphShape
 
 type Graph :: U.SimulationType -> GraphShape -> Type
 data Graph simType shape where
@@ -120,10 +130,10 @@ choose :: ValidGraphNode inputs outcome => (HList inputs -> outcome) -> Graph si
 choose = GNode . NChoice . Choice
 
 (.*.) ::
-    MayConcatGraphs (OpenInputs shape1) (AllOutcomes shape1) (OpenInputs shape2) (AllOutcomes shape2) =>
-    Graph simType shape1 ->
-    Graph simType shape2 ->
-    Graph simType (shape1 ':*: shape2)
+  MayConcatGraphs (OpenInputs shape1) (AllOutcomes shape1) (OpenInputs shape2) (AllOutcomes shape2) =>
+  Graph simType shape1 ->
+  Graph simType shape2 ->
+  Graph simType (shape1 ':*: shape2)
 (.*.) = GConcat
 
 infixr 5 .*.
@@ -135,14 +145,27 @@ class Compile t where
   type Compiled t :: Type
   compile :: t -> Compiled t
 
-toState :: Data a => a -> State
-toState = State . Data.showConstr . Data.toConstr
+class AsState a where
+  toState :: a -> State
+  fromState :: State -> Maybe a
 
-ofState :: forall a. Data a => State -> Maybe a
-ofState (State s) = Data.fromConstr <$> Data.readConstr (Data.dataTypeOf (undefined :: a)) s
+class AsLabel a where
+  toLabel :: Label
 
-toLabel :: forall a. Data a => Label
-toLabel = Label . Data.tyConName . Data.typeRepTyCon . Data.typeRep $ Proxy @a
+newtype Datally a = Datally a
+
+instance Data a => AsState (Datally a) where
+  toState (Datally a) = State . Data.showConstr . Data.toConstr $ a
+  fromState (State s) = Datally . Data.fromConstr <$> Data.readConstr (Data.dataTypeOf (undefined :: a)) s
+
+instance Data a => AsLabel (Datally a) where
+  toLabel = Label . Data.tyConName . Data.typeRepTyCon . Data.typeRep $ Proxy @a
+
+newtype Showly a = Showly a
+
+instance (Show a, Read a) => AsState (Showly a) where
+  toState (Showly a) = State . show $ a
+  fromState (State s) = Showly <$> readMaybe s
 
 type CompilableInputs :: [Type] -> Constraint
 
@@ -153,17 +176,12 @@ type CompilableInputs inputs =
     Compiled (HList inputs) ~ [U.Guard]
   )
 
-type CompilableOutcome outcome = Data outcome
-
--- type CompilableOutcomes :: [Type] -> Constraint
--- type family CompilableOutcomes outcomes where
---   CompilableOutcomes '[] = ()
---   CompilableOutcomes (t : ts) = (CompilableOutcome t, CompilableOutcomes ts)
+type CompilableOutcome outcome = (AsState outcome, AsLabel outcome)
 
 instance
-  ( outcomes ~ '[outcome]
-  , CompilableOutcome outcome
-  , CompilableInputs inputs
+  ( outcomes ~ '[outcome],
+    CompilableOutcome outcome,
+    CompilableInputs inputs
   ) =>
   Compile (Graph simType ('N inputs outcome))
   where
@@ -172,10 +190,10 @@ instance
     U.Graph [Labeled (toLabel @outcome) (compile node)]
 
 instance
-  ( Compile (Graph simType shapeLeft)
-  , Compiled (Graph simType shapeLeft) ~ U.Graph simType
-  , Compile (Graph simType shapeRight)
-  , Compiled (Graph simType shapeRight) ~ U.Graph simType
+  ( Compile (Graph simType shapeLeft),
+    Compiled (Graph simType shapeLeft) ~ U.Graph simType,
+    Compile (Graph simType shapeRight),
+    Compiled (Graph simType shapeRight) ~ U.Graph simType
   ) =>
   Compile (Graph simType (shapeLeft ':*: shapeRight))
   where
@@ -194,10 +212,10 @@ instance
   compile (NDistribution a) = compileDistribution a
   compile (NChoice a) = compileChoice a
 
-compileAlways :: Data a => Always a -> U.Node simType
+compileAlways :: AsState a => Always a -> U.Node simType
 compileAlways (Always outcome) = U.Always (toState outcome)
 
-compileDistribution :: Data a => Distribution a -> U.Node 'U.Stochastic
+compileDistribution :: AsState a => Distribution a -> U.Node 'U.Stochastic
 compileDistribution (Distribution weightedOutcomes) =
   U.Distribution (fmap (fmap toState) weightedOutcomes)
 
@@ -214,40 +232,75 @@ instance Compile (HList '[]) where
   type Compiled (HList '[]) = [U.Guard]
   compile _ = []
 
-instance (Data t, Compile (HList ts), Compiled (HList ts) ~ [U.Guard]) => Compile (HList (t : ts)) where
+instance
+  ( AsLabel t,
+    AsState t,
+    Compile (HList ts),
+    Compiled (HList ts) ~ [U.Guard]
+  ) =>
+  Compile (HList (t : ts))
+  where
   type Compiled (HList (t : ts)) = [U.Guard]
   compile (a `HCons` as) = U.Guard (toLabel @t) (toState a) : compile as
 
 --------------------------------------------------------------------------------
 ---- Example: Xor Blackmail
 
-data Infestation = Termites | NoTermites deriving (Eq, Show)
+data Infestation = Termites | NoTermites
+  deriving (Eq, Show, Data, Enum, Bounded)
+  deriving (AsLabel, AsState) via (Datally Infestation)
 
-data Predisposition = Payer | Refuser deriving (Eq, Show)
+data Predisposition = Payer | Refuser
+  deriving (Eq, Show, Data, Enum, Bounded)
+  deriving (AsLabel, AsState) via (Datally Predisposition)
 
-data Prediction = Skeptic | Gullible deriving (Eq, Show)
+data Prediction = Skeptic | Gullible
+  deriving (Eq, Show, Data, Enum, Bounded)
+  deriving (AsLabel, AsState) via (Datally Prediction)
 
-data Observation = Letter | NoLetter deriving (Eq, Show)
+data Observation = Letter | NoLetter
+  deriving (Eq, Show, Data, Enum, Bounded)
+  deriving (AsLabel, AsState) via (Datally Observation)
 
-data Action = Pay | Refuse deriving (Eq, Show)
+data Action = Pay | Refuse
+  deriving (Eq, Show, Data, Enum, Bounded)
+  deriving (AsLabel, AsState) via (Datally Action)
 
-newtype Value = Value Int deriving (Eq, Show)
+newtype Value = Value Int
+  deriving stock (Eq, Show, Data)
+  deriving newtype (Enum, Bounded)
+  deriving (AsLabel) via (Datally Value)
+  deriving (AsState) via (Showly Int)
 
+xorBlackmail ::
+  Graph
+    'U.Stochastic
+    ( 'N '[] Infestation
+        ':*: ( 'N '[] Predisposition
+                 ':*: ( 'N '[Infestation, Predisposition] Prediction
+                          ':*: ( 'N '[Prediction] Observation
+                                   ':*: ( 'N '[Predisposition] Action
+                                            ':*: 'N '[Infestation, Action] Value
+                                        )
+                               )
+                      )
+             )
+    )
 xorBlackmail =
   distribution
-    [ Termites %= 50,
-      NoTermites %= 50
+    [ Termites %= 0.5,
+      NoTermites %= 0.5
     ]
     .*. distribution
-      [ Payer %= 50,
-        Refuser %= 50
+      [ Payer %= 0.5,
+        Refuser %= 0.5
       ]
     .*. choose
       ( \case
           Termites `HCons` Payer `HCons` HNil -> Skeptic
           Termites `HCons` Refuser `HCons` HNil -> Gullible
           NoTermites `HCons` Payer `HCons` HNil -> Gullible
-          NoTermites `HCons` Refuser `HCons` HNil -> Gullible
+          NoTermites `HCons` Refuser `HCons` HNil -> Skeptic
       )
     .*. choose
       ( \case

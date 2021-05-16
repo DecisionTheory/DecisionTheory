@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings, DeriveDataTypeable, TypeApplications #-}
+{-# LANGUAGE OverloadedStrings, DeriveDataTypeable, TypeApplications, DataKinds #-}
 {-# OPTIONS_GHC -fno-warn-missing-signatures #-}
 {- HLINT ignore "Redundant do" -}
 
@@ -16,7 +16,7 @@ module DeathInDamascus (tests) where
   import qualified DecisionTheory.TypedDecisionTheory as T
   import DecisionTheory.TypedGraph(distribution, choose, when, is, elsewise, (.*.), (.|.), (.&.))
 
-  untypedDeathInDamascus :: UG.Graph UG.Stochastic
+  untypedDeathInDamascus :: UG.Graph 'UG.Stochastic
   untypedDeathInDamascus = UG.Graph [Labeled "Predisposition" predisposition
                                     ,Labeled "Action"         action
                                     ,Labeled "Death"          death

@@ -27,15 +27,15 @@ library
       DecisionTheory.Probability
       DecisionTheory.TypedDecisionTheory
       DecisionTheory.TypedGraph
-      DecisionTheory.TypedGraph2
+      DecisionTheory.V2.HList
+      DecisionTheory.V2.TypedGraph
+      DecisionTheory.V2.TypeSet
   other-modules:
       Paths_DecisionTheory
   hs-source-dirs:
       src
   build-depends:
       base >=4.7 && <5, HList
-  ghc-options:
-      -Wall
   default-language: Haskell2010
 
 test-suite DecisionTheory-test

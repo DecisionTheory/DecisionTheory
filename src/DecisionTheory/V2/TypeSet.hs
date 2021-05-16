@@ -8,8 +8,9 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# OPTIONS_GHC -Wall #-}
 
-module DecisionTheory.TypeSet
+module DecisionTheory.V2.TypeSet
   ( TypeSet,
     AllUnique,
     CheckAllUnique,
@@ -17,6 +18,7 @@ module DecisionTheory.TypeSet
     If,
     IfLazy,
     Elem,
+    CheckElem,
     CheckNotElem,
     Disjoint,
     CheckDisjoint,
@@ -47,18 +49,18 @@ type family ts ++ us where
 
 type IfLazy :: Bool -> (() -> k) -> (() -> k) -> k
 type family IfLazy cond then_ else_ where
-  IfLazy True then_ _ = then_ '()
-  IfLazy False _ else_ = else_ '()
+  IfLazy 'True then_ _ = then_ '()
+  IfLazy 'False _ else_ = else_ '()
 
 type If :: Bool -> k -> k -> k
 type family If cond then_ else_ where
-  If True then_ _ = then_
-  If False _ else_ = else_
+  If 'True then_ _ = then_
+  If 'False _ else_ = else_
 
 type Elem :: Type -> [Type] -> Bool
 type family Elem t ts where
-  Elem _ '[] = False
-  Elem t (t : _) = True
+  Elem _ '[] = 'False
+  Elem t (t : _) = 'True
   Elem t (_ : ts) = Elem t ts
 
 type CheckElem t ts onFail = IfLazy (Elem t ts) Solved onFail
@@ -83,8 +85,8 @@ instance (CheckAllUnique ts onFail) => AllUnique onFail ts
 type DuplicatesInTypeList :: [Type] -> ErrorMessage
 
 type DuplicatesInTypeList ts =
-  Text "Duplicated types in type list:"
-    :$$: ShowType ts
+  'Text "Duplicated types in type list:"
+    ':$$: 'ShowType ts
 
 type TypeSet :: [Type] -> Constraint
 class (AllUnique (DuplicatesInTypeList ts) ts) => TypeSet ts
