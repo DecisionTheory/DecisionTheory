@@ -23,6 +23,7 @@ module DecisionTheory.TypeSet
     Union,
     SetDifference,
     type (++),
+    SubsetOf,
   )
 where
 
@@ -119,3 +120,6 @@ type family SetDifference ts us where
       (Elem t us)
       (SetDifference ts us)
       (t : SetDifference ts us)
+
+type family ts `SubsetOf` us where
+  ts `SubsetOf` us = SetDifference ts us ~ '[]

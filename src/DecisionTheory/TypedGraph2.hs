@@ -1,13 +1,17 @@
+{-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE ImportQualifiedPost #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE PolyKinds #-}
+{-# LANGUAGE QuantifiedConstraints #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE StandaloneKindSignatures #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -16,30 +20,30 @@
 
 module DecisionTheory.TypedGraph2 where
 
+import Data.Data (Data, Proxy (Proxy))
+import Data.Data qualified as Data
 import Data.HList.HList (HList (..))
-import Data.Kind (Type)
-import DecisionTheory.TypeSet (Disjoint, NotElem, SetDifference, TypeSet, Union, type (++))
+import Data.Kind (Constraint, Type)
+import DecisionTheory.Base (Label (..), Labeled (..), State (..))
+import DecisionTheory.EnumHList (EnumerateHList (..))
+import DecisionTheory.Graph qualified as U
+import DecisionTheory.Probability (Probability, (%=))
+import DecisionTheory.TypeSet (Disjoint, NotElem, SetDifference, SubsetOf, TypeSet, Union, type (++), Elem)
 import GHC.TypeLits (ErrorMessage (..))
-
-data SimulationType = Deterministic | Stochastic
-
-type family CombineSimulationTypes (st1 :: SimulationType) (st2 :: SimulationType) where
-  CombineSimulationTypes 'Deterministic 'Deterministic = 'Deterministic
-  CombineSimulationTypes _ _ = 'Stochastic
 
 type Always :: Type -> Type
 newtype Always outcome = Always outcome
 
 type Distribution :: Type -> Type
-newtype Distribution outcome = Distribution [(Word, outcome)]
+newtype Distribution outcome = Distribution [Probability outcome]
 
 type Choice :: [Type] -> Type -> Type
 newtype Choice inputs outcome = Choice (TypeSet inputs => HList inputs -> outcome)
 
-type Node :: SimulationType -> [Type] -> Type -> Type
+type Node :: U.SimulationType -> [Type] -> Type -> Type
 data Node simType inputs outcome where
   NAlways :: Always outcome -> Node simType '[] outcome
-  NDistribution :: Distribution outcome -> Node 'Stochastic '[] outcome
+  NDistribution :: Distribution outcome -> Node 'U.Stochastic '[] outcome
   NChoice :: Choice inputs outcome -> Node simType inputs outcome
 
 type NodeOutcomeMayNotBeOneOfInputs :: [Type] -> Type -> ErrorMessage
@@ -76,46 +80,50 @@ type OutcomeShouldPrecedeInput leftHandInputs rightHandOutcomes =
 type ValidGraphNode inputs outcome =
   NotElem (NodeOutcomeMayNotBeOneOfInputs inputs outcome) outcome inputs
 
+type AllOutcomes :: GraphShape -> [Type]
+type family AllOutcomes shape where
+  AllOutcomes (N _ outcome) = '[outcome]
+  AllOutcomes (left :*: right) = Union (AllOutcomes left) (AllOutcomes right)
+
+type OpenInputs :: GraphShape -> [Type]
+type family OpenInputs shape where
+  OpenInputs (N inputs _) = inputs
+  OpenInputs (left :*: right) = Union (OpenInputs left) (SetDifference (OpenInputs right) (AllOutcomes left))
+
 type MayConcatGraphs inputs1 outcomes1 inputs2 outcomes2 =
   ( Disjoint (NoDuplicatedOutcomesInGraph outcomes1 outcomes2) outcomes1 outcomes2,
     Disjoint (OutcomeShouldPrecedeInput inputs1 outcomes2) outcomes2 inputs1
   )
 
-type Graph :: SimulationType -> [Type] -> [Type] -> Type
-data Graph simType inputs outcomes where
-  GNode ::
-    ValidGraphNode inputs outcome =>
-    Node simType inputs outcome ->
-    Graph simType inputs '[outcome]
-  GConcat ::
-    MayConcatGraphs inputs1 outcomes1 inputs2 outcomes2 =>
-    Graph simType1 inputs1 outcomes1 ->
-    Graph simType2 inputs2 outcomes2 ->
-    Graph
-      (CombineSimulationTypes simType1 simType2)
-      (Union inputs1 (SetDifference inputs2 outcomes1))
-      (outcomes1 ++ outcomes2)
+data GraphShape =
+  N [Type] Type | (:*:) GraphShape GraphShape
 
-always :: outcome -> Graph simType '[] '[outcome]
+type Graph :: U.SimulationType -> GraphShape -> Type
+data Graph simType shape where
+  GNode ::
+    ValidGraphNode requiredInputs outcome =>
+    Node simType requiredInputs outcome ->
+    Graph simType ('N requiredInputs outcome)
+  GConcat ::
+    MayConcatGraphs (OpenInputs shape1) (AllOutcomes shape1) (OpenInputs shape2) (AllOutcomes shape2) =>
+    Graph simType shape1 ->
+    Graph simType shape2 ->
+    Graph simType (shape1 ':*: shape2)
+
+always :: outcome -> Graph simType ('N '[] outcome)
 always = GNode . NAlways . Always
 
-distribution :: [(Word, outcome)] -> Graph 'Stochastic '[] '[outcome]
+distribution :: [Probability outcome] -> Graph 'U.Stochastic ('N '[] outcome)
 distribution = GNode . NDistribution . Distribution
 
-choose :: ValidGraphNode inputs outcome => (HList inputs -> outcome) -> Graph simType inputs '[outcome]
+choose :: ValidGraphNode inputs outcome => (HList inputs -> outcome) -> Graph simType ('N inputs outcome)
 choose = GNode . NChoice . Choice
 
-(%=) :: b -> a -> (a, b)
-v %= weight = (weight, v)
-
 (.*.) ::
-  MayConcatGraphs inputs1 outcomes1 inputs2 outcomes2 =>
-  Graph simType1 inputs1 outcomes1 ->
-  Graph simType2 inputs2 outcomes2 ->
-  Graph
-    (CombineSimulationTypes simType1 simType2)
-    (Union inputs1 (SetDifference inputs2 outcomes1))
-    (outcomes1 ++ outcomes2)
+    MayConcatGraphs (OpenInputs shape1) (AllOutcomes shape1) (OpenInputs shape2) (AllOutcomes shape2) =>
+    Graph simType shape1 ->
+    Graph simType shape2 ->
+    Graph simType (shape1 ':*: shape2)
 (.*.) = GConcat
 
 infixr 5 .*.
@@ -125,6 +133,90 @@ infixr 5 .*.
 
 class Compile t where
   type Compiled t :: Type
+  compile :: t -> Compiled t
+
+toState :: Data a => a -> State
+toState = State . Data.showConstr . Data.toConstr
+
+ofState :: forall a. Data a => State -> Maybe a
+ofState (State s) = Data.fromConstr <$> Data.readConstr (Data.dataTypeOf (undefined :: a)) s
+
+toLabel :: forall a. Data a => Label
+toLabel = Label . Data.tyConName . Data.typeRepTyCon . Data.typeRep $ Proxy @a
+
+type CompilableInputs :: [Type] -> Constraint
+
+type CompilableInputs inputs =
+  ( TypeSet inputs,
+    EnumerateHList inputs,
+    Compile (HList inputs),
+    Compiled (HList inputs) ~ [U.Guard]
+  )
+
+type CompilableOutcome outcome = Data outcome
+
+-- type CompilableOutcomes :: [Type] -> Constraint
+-- type family CompilableOutcomes outcomes where
+--   CompilableOutcomes '[] = ()
+--   CompilableOutcomes (t : ts) = (CompilableOutcome t, CompilableOutcomes ts)
+
+instance
+  ( outcomes ~ '[outcome]
+  , CompilableOutcome outcome
+  , CompilableInputs inputs
+  ) =>
+  Compile (Graph simType ('N inputs outcome))
+  where
+  type Compiled (Graph simType ('N inputs outcome)) = U.Graph simType
+  compile (GNode node) =
+    U.Graph [Labeled (toLabel @outcome) (compile node)]
+
+instance
+  ( Compile (Graph simType shapeLeft)
+  , Compiled (Graph simType shapeLeft) ~ U.Graph simType
+  , Compile (Graph simType shapeRight)
+  , Compiled (Graph simType shapeRight) ~ U.Graph simType
+  ) =>
+  Compile (Graph simType (shapeLeft ':*: shapeRight))
+  where
+  type Compiled (Graph simType (shapeLeft ':*: shapeRight)) = U.Graph simType
+  compile (GConcat gleft gright) =
+    U.Graph ((U.unGraph . compile) gleft ++ (U.unGraph . compile) gright)
+
+instance
+  ( CompilableInputs inputs,
+    CompilableOutcome outcome
+  ) =>
+  Compile (Node simType inputs outcome)
+  where
+  type Compiled (Node simType inputs outcome) = U.Node simType
+  compile (NAlways a) = compileAlways a
+  compile (NDistribution a) = compileDistribution a
+  compile (NChoice a) = compileChoice a
+
+compileAlways :: Data a => Always a -> U.Node simType
+compileAlways (Always outcome) = U.Always (toState outcome)
+
+compileDistribution :: Data a => Distribution a -> U.Node 'U.Stochastic
+compileDistribution (Distribution weightedOutcomes) =
+  U.Distribution (fmap (fmap toState) weightedOutcomes)
+
+compileChoice ::
+  forall inputs outcome simType.
+  (CompilableInputs inputs, CompilableOutcome outcome) =>
+  Choice inputs outcome ->
+  U.Node simType
+compileChoice (Choice choiceFn) = U.Conditional (toClause <$> enumerateHList @inputs)
+  where
+    toClause params = U.Clause (compile params) (toState $ choiceFn params)
+
+instance Compile (HList '[]) where
+  type Compiled (HList '[]) = [U.Guard]
+  compile _ = []
+
+instance (Data t, Compile (HList ts), Compiled (HList ts) ~ [U.Guard]) => Compile (HList (t : ts)) where
+  type Compiled (HList (t : ts)) = [U.Guard]
+  compile (a `HCons` as) = U.Guard (toLabel @t) (toState a) : compile as
 
 --------------------------------------------------------------------------------
 ---- Example: Xor Blackmail
@@ -141,17 +233,6 @@ data Action = Pay | Refuse deriving (Eq, Show)
 
 newtype Value = Value Int deriving (Eq, Show)
 
-xorBlackmail ::
-  Graph
-    'Stochastic
-    '[]
-    '[ Infestation,
-       Predisposition,
-       Prediction,
-       Observation,
-       Action,
-       Value
-     ]
 xorBlackmail =
   distribution
     [ Termites %= 50,
