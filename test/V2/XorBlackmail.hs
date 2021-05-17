@@ -16,10 +16,12 @@ module V2.XorBlackmail (tests) where
 
 import Data.Data (Data)
 import DecisionTheory.Base (Labeled (Labeled))
+import DecisionTheory.DecisionTheory (Utility)
 import qualified DecisionTheory.Graph as UG
 import DecisionTheory.Probability ((%=))
-import DecisionTheory.V2.HList (hAsSingle, hAsTuple)
+import DecisionTheory.V2.HList (hAsSingle, hAsTuple, hFromSingle)
 import DecisionTheory.V2.Stringify (AsLabel, AsState, Datally (..), Showly (..))
+import qualified DecisionTheory.V2.TypedDecisionTheory as TypedDT
 import DecisionTheory.V2.TypedGraph (choose, distribution, (.*.))
 import qualified DecisionTheory.V2.TypedGraph as TG
 import Test.Hspec (describe, hspec, it, shouldBe)
@@ -131,6 +133,12 @@ xorBlackmail =
           (NoTermites, Refuse) -> (Value 0)
       )
 
+utilityFunction :: Value -> Utility
+utilityFunction (Value v) = fromIntegral v
+
+xorBlackmailOf :: _
+xorBlackmailOf t = t (hFromSingle Letter) utilityFunction xorBlackmail
+
 tests :: IO ()
 tests = hspec $
   describe "XOR Blackmail" $ do
@@ -138,7 +146,6 @@ tests = hspec $
       UG.choices "Action" (UG.branches untypedXorBlackmail) `shouldBe` ["Pay", "Refuse"]
     it "Typed graph should compile to the untyped graph" $ do
       TG.compile xorBlackmail `shouldBe` untypedXorBlackmail
-
--- it "EDT chooses to pay" $ xorBlackmailOf T.edt `shouldBe` [(Pay, -1000.0)]
--- it "CDT chooses to refuse" $ xorBlackmailOf T.cdt `shouldBe` [(Refuse, -1000000.0)]
--- it "FDT chooses to refuse" $ xorBlackmailOf (T.fdt @Predisposition) `shouldBe` [(Refuse, -1000000.0)]
+    it "EDT chooses to pay" $ xorBlackmailOf TypedDT.edt `shouldBe` [(Pay, -1000.0)]
+    it "CDT chooses to refuse" $ xorBlackmailOf TypedDT.cdt `shouldBe` [(Refuse, -1000000.0)]
+    it "FDT chooses to refuse" $ xorBlackmailOf (TypedDT.fdt @Predisposition) `shouldBe` [(Refuse, -1000000.0)]

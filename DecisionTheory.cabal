@@ -31,6 +31,7 @@ library
       DecisionTheory.V2.TypedGraph
       DecisionTheory.V2.TypeSet
       DecisionTheory.V2.Stringify
+      DecisionTheory.V2.TypedDecisionTheory
   other-modules:
       Paths_DecisionTheory
   hs-source-dirs:

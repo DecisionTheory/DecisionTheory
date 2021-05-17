@@ -28,6 +28,8 @@
 module DecisionTheory.V2.TypedGraph
   ( module DecisionTheory.V2.TypedGraph,
     HList (..),
+    hAsSingle,
+    hAsTuple,
   )
 where
 
@@ -41,6 +43,8 @@ import DecisionTheory.V2.Stringify (AsLabel (..), AsState (..), Datally (..), Sh
 import DecisionTheory.V2.TypeSet (Disjoint, NotElem, SetDifference, TypeSet, Union)
 import GHC.TypeLits (ErrorMessage (..))
 
+type Guards inputs = HList inputs
+
 type Always :: Type -> Type
 newtype Always outcome = Always outcome
 
@@ -48,7 +52,7 @@ type Distribution :: Type -> Type
 newtype Distribution outcome = Distribution [Probability outcome]
 
 type Choice :: [Type] -> Type -> Type
-newtype Choice inputs outcome = Choice (TypeSet inputs => HList inputs -> outcome)
+newtype Choice inputs outcome = Choice (TypeSet inputs => Guards inputs -> outcome)
 
 type Node :: U.SimulationType -> [Type] -> Type -> Type
 data Node simType inputs outcome where
