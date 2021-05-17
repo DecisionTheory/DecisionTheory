@@ -32,9 +32,6 @@ module DecisionTheory.Graph
   import DecisionTheory.Base
   import DecisionTheory.Probability
 
-  -- data Stochastic
-  -- data Deterministic
-
   data SimulationType = Deterministic | Stochastic
 
   type family CombineSimulationTypes (st1 :: SimulationType) (st2 :: SimulationType) where
