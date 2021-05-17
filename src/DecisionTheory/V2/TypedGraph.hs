@@ -11,6 +11,7 @@
 {-# LANGUAGE ImportQualifiedPost #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE PartialTypeSignatures #-}
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE QuantifiedConstraints #-}
@@ -22,6 +23,7 @@
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# OPTIONS_GHC -Wall #-}
+{-# OPTIONS_GHC -Wno-partial-type-signatures #-}
 
 module DecisionTheory.V2.TypedGraph
   ( module DecisionTheory.V2.TypedGraph,
@@ -29,16 +31,15 @@ module DecisionTheory.V2.TypedGraph
   )
 where
 
-import Data.Data (Data, Proxy (Proxy))
-import Data.Data qualified as Data
+import Data.Data (Data)
 import Data.Kind (Constraint, Type)
-import DecisionTheory.Base (Label (..), Labeled (..), State (..))
+import DecisionTheory.Base (Labeled (..))
 import DecisionTheory.Graph qualified as U
 import DecisionTheory.Probability (Probability, (%=))
-import DecisionTheory.V2.HList (EnumerateHList (..), HList (..))
+import DecisionTheory.V2.HList (EnumerateHList (..), HList (..), hAsSingle, hAsTuple)
+import DecisionTheory.V2.Stringify (AsLabel (..), AsState (..), Datally (..), Showly (..))
 import DecisionTheory.V2.TypeSet (Disjoint, NotElem, SetDifference, TypeSet, Union)
 import GHC.TypeLits (ErrorMessage (..))
-import Text.Read (readMaybe)
 
 type Always :: Type -> Type
 newtype Always outcome = Always outcome
@@ -145,28 +146,6 @@ class Compile t where
   type Compiled t :: Type
   compile :: t -> Compiled t
 
-class AsState a where
-  toState :: a -> State
-  fromState :: State -> Maybe a
-
-class AsLabel a where
-  toLabel :: Label
-
-newtype Datally a = Datally a
-
-instance Data a => AsState (Datally a) where
-  toState (Datally a) = State . Data.showConstr . Data.toConstr $ a
-  fromState (State s) = Datally . Data.fromConstr <$> Data.readConstr (Data.dataTypeOf (undefined :: a)) s
-
-instance Data a => AsLabel (Datally a) where
-  toLabel = Label . Data.tyConName . Data.typeRepTyCon . Data.typeRep $ Proxy @a
-
-newtype Showly a = Showly a
-
-instance (Show a, Read a) => AsState (Showly a) where
-  toState (Showly a) = State . show $ a
-  fromState (State s) = Showly <$> readMaybe s
-
 type CompilableInputs :: [Type] -> Constraint
 
 type CompilableInputs inputs =
@@ -241,7 +220,7 @@ instance
   Compile (HList (t : ts))
   where
   type Compiled (HList (t : ts)) = [U.Guard]
-  compile (a `HCons` as) = U.Guard (toLabel @t) (toState a) : compile as
+  compile (a ::: as) = U.Guard (toLabel @t) (toState a) : compile as
 
 --------------------------------------------------------------------------------
 ---- Example: Xor Blackmail
@@ -272,20 +251,7 @@ newtype Value = Value Int
   deriving (AsLabel) via (Datally Value)
   deriving (AsState) via (Showly Int)
 
-xorBlackmail ::
-  Graph
-    'U.Stochastic
-    ( 'N '[] Infestation
-        ':*: ( 'N '[] Predisposition
-                 ':*: ( 'N '[Infestation, Predisposition] Prediction
-                          ':*: ( 'N '[Prediction] Observation
-                                   ':*: ( 'N '[Predisposition] Action
-                                            ':*: 'N '[Infestation, Action] Value
-                                        )
-                               )
-                      )
-             )
-    )
+xorBlackmail :: Graph _ _
 xorBlackmail =
   distribution
     [ Termites %= 0.5,
@@ -296,26 +262,26 @@ xorBlackmail =
         Refuser %= 0.5
       ]
     .*. choose
-      ( \case
-          Termites `HCons` Payer `HCons` HNil -> Skeptic
-          Termites `HCons` Refuser `HCons` HNil -> Gullible
-          NoTermites `HCons` Payer `HCons` HNil -> Gullible
-          NoTermites `HCons` Refuser `HCons` HNil -> Skeptic
+      ( hAsTuple $ \case
+          (Termites, Payer) -> Skeptic
+          (Termites, Refuser) -> Gullible
+          (NoTermites, Payer) -> Gullible
+          (NoTermites, Refuser) -> Skeptic
       )
     .*. choose
-      ( \case
-          (Gullible `HCons` HNil) -> Letter
-          (Skeptic `HCons` HNil) -> NoLetter
+      ( hAsSingle $ \case
+          Gullible -> Letter
+          Skeptic -> NoLetter
       )
     .*. choose
-      ( \case
-          (Payer `HCons` HNil) -> Pay
-          (Refuser `HCons` HNil) -> Refuse
+      ( hAsSingle $ \case
+          Payer -> Pay
+          Refuser -> Refuse
       )
     .*. choose
-      ( \case
-          Termites `HCons` Pay `HCons` HNil -> (Value $ -1001000)
-          Termites `HCons` Refuse `HCons` HNil -> (Value $ -1000000)
-          NoTermites `HCons` Pay `HCons` HNil -> (Value $ -1000)
-          NoTermites `HCons` Refuse `HCons` HNil -> (Value 0)
+      ( hAsTuple $ \case
+          (Termites, Pay) -> (Value $ -1001000)
+          (Termites, Refuse) -> (Value $ -1000000)
+          (NoTermites, Pay) -> (Value $ -1000)
+          (NoTermites, Refuse) -> (Value 0)
       )

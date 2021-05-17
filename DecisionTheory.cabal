@@ -30,6 +30,7 @@ library
       DecisionTheory.V2.HList
       DecisionTheory.V2.TypedGraph
       DecisionTheory.V2.TypeSet
+      DecisionTheory.V2.Stringify
   other-modules:
       Paths_DecisionTheory
   hs-source-dirs:
@@ -47,6 +48,7 @@ test-suite DecisionTheory-test
       Newcomb
       ParfitsHitchhiker
       XorBlackmail
+      V2.XorBlackmail
       Paths_DecisionTheory
   hs-source-dirs:
       test
