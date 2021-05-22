@@ -25,8 +25,9 @@ module DecisionTheory.V2.HList
   )
 where
 
--- import Data.HList.HList (HList (..))
 import Data.Kind (Constraint, Type)
+
+-- definition copied from HList package
 
 type HList :: [Type] -> Type
 data family HList ts
