@@ -45,10 +45,12 @@ test-suite DecisionTheory-test
   main-is: Spec.hs
   other-modules:
       DeathInDamascus
+      V2.DeathInDamascus
       DecisionTheoryTests
       Newcomb
       V2.Newcomb
       ParfitsHitchhiker
+      V2.ParfitsHitchhiker
       XorBlackmail
       V2.XorBlackmail
       Paths_DecisionTheory
