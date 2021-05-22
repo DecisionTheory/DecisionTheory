@@ -48,14 +48,17 @@ type Decidable shape guards action result simType =
 
 type Solutions a = [(a, DT.Utility)]
 
-dt ::
-  forall shape (guards :: [Type]) action result simType.
-  Decidable shape guards action result 'UG.Stochastic =>
-  DT.Hypothesis ->
+type DecisionTheory shape guards action result =
   TG.Guards guards ->
   (result -> DT.Utility) ->
   TG.Graph UG.Stochastic shape ->
   Solutions action
+
+dt ::
+  forall shape (guards :: [Type]) action result simType.
+  Decidable shape guards action result 'UG.Stochastic =>
+  DT.Hypothesis ->
+  DecisionTheory shape guards action result
 dt h gs uf g = map result $ DT.dt h guards search graph
   where
     guards = TG.compile gs
@@ -67,19 +70,13 @@ dt h gs uf g = map result $ DT.dt h guards search graph
 edt ::
   forall shape (guards :: [Type]) action result simType.
   Decidable shape guards action result 'UG.Stochastic =>
-  TG.Guards guards ->
-  (result -> DT.Utility) ->
-  TG.Graph UG.Stochastic shape ->
-  Solutions action
+  DecisionTheory shape guards action result
 edt = dt DT.condition
 
 cdt ::
   forall shape (guards :: [Type]) action result simType.
   Decidable shape guards action result 'UG.Stochastic =>
-  TG.Guards guards ->
-  (result -> DT.Utility) ->
-  TG.Graph UG.Stochastic shape ->
-  Solutions action
+  DecisionTheory shape guards action result
 cdt = dt DT.intervene
 
 type ValidInterventionNode :: Type -> Bool -> Constraint
@@ -98,8 +95,5 @@ fdt ::
     AsLabel interventionNode,
     ValidInterventionNode interventionNode (interventionNode `Elem` TG.AllOutcomes shape)
   ) =>
-  TG.Guards guards ->
-  (result -> DT.Utility) ->
-  TG.Graph UG.Stochastic shape ->
-  Solutions action
+  DecisionTheory shape guards action result
 fdt = dt $ DT.counterFactualize $ toLabel @interventionNode

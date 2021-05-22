@@ -47,6 +47,7 @@ test-suite DecisionTheory-test
       DeathInDamascus
       DecisionTheoryTests
       Newcomb
+      V2.Newcomb
       ParfitsHitchhiker
       XorBlackmail
       V2.XorBlackmail
