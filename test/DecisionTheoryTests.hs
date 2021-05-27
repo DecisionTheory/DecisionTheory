@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings, ViewPatterns #-}
+{-# LANGUAGE OverloadedStrings, ViewPatterns, DataKinds #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 {- HLINT ignore "Redundant do" -}
 
@@ -15,7 +15,7 @@ module DecisionTheoryTests (tests) where
   import DecisionTheory.Probability
   import DecisionTheory.Graph
 
-  weird :: Graph Stochastic
+  weird :: Graph 'Stochastic
   weird = Graph [Labeled "a" a
                 ,Labeled "b" b
                 ,Labeled "c" c
@@ -44,7 +44,7 @@ module DecisionTheoryTests (tests) where
                    %= 0.5
                   ]
 
-  simple :: Graph Stochastic
+  simple :: Graph 'Stochastic
   simple = Graph [Labeled "a" $ Distribution ["a1" %= 0.1
                                              ,"a2" %= 0.9
                                              ]

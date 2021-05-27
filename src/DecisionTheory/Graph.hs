@@ -5,6 +5,9 @@
   , ViewPatterns
   #-}
 
+{-# LANGUAGE KindSignatures #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE TypeFamilies #-}
 module DecisionTheory.Graph
   ( Node (..)
   , Guard (..)
@@ -12,8 +15,8 @@ module DecisionTheory.Graph
   , clauseValue
   , Graph (..)
   , unGraph
-  , Deterministic
-  , Stochastic
+  , SimulationType (..)
+  , CombineSimulationTypes
   , choices
   , Branch
   , mapBranches
@@ -29,12 +32,15 @@ module DecisionTheory.Graph
   import DecisionTheory.Base
   import DecisionTheory.Probability
 
-  data Stochastic
-  data Deterministic
+  data SimulationType = Deterministic | Stochastic
 
-  data Node a where
+  type family CombineSimulationTypes (st1 :: SimulationType) (st2 :: SimulationType) where
+    CombineSimulationTypes 'Deterministic 'Deterministic = 'Deterministic
+    CombineSimulationTypes _ _ = 'Stochastic
+
+  data Node (a :: SimulationType) where
      Always :: State -> Node a
-     Distribution :: [Probability State] -> Node Stochastic
+     Distribution :: [Probability State] -> Node 'Stochastic
      Conditional :: [Clause] -> Node a
   deriving instance Eq (Node a)
   deriving instance Show (Node a)
@@ -62,20 +68,20 @@ module DecisionTheory.Graph
           clauses = L.nub . L.sort . concatMap (\(Clause gs _) -> guards gs)
           guards  = L.nub . L.sort . map (\(Guard (Label n) _) -> n)
 
-  find :: Label -> Graph Deterministic -> Maybe State
+  find :: Label -> Graph 'Deterministic -> Maybe State
   find l g@(Graph lns) = resolve =<< getByLabel lns
     where getByLabel :: [Labeled (Node a)] -> Maybe (Node a)
           getByLabel [] = Nothing
           getByLabel (Labeled l' n : lns) | l' == l = Just n
                                           | otherwise = getByLabel lns
-          resolve :: Node Deterministic -> Maybe State
+          resolve :: Node 'Deterministic -> Maybe State
           resolve (Always v) = Just v
           resolve (Conditional cs) = fmap (clauseValue.fst) $ L.uncons $ filter clauseMatches cs
           clauseMatches :: Clause -> Bool
           clauseMatches (Clause gs _) = all guardMatches gs
           guardMatches (Guard l' v) = find l' g == Just v
 
-  type Branch = Probability (Graph Deterministic)
+  type Branch = Probability (Graph 'Deterministic)
 
   probabilities :: Label -> [Branch] -> [Probability State]
   probabilities l = squash (when (==)) . M.mapMaybe find'
@@ -87,7 +93,7 @@ module DecisionTheory.Graph
   choices :: Label -> [Branch] -> [State]
   choices l = map probabilityElement . probabilities l
 
-  branches :: Graph Stochastic -> [Branch]
+  branches :: Graph 'Stochastic -> [Branch]
   branches (Graph ls) = filter ((>0) . snd . unProbability) $ loop ls
     where prepend l = fmap $ \(Graph ls) -> Graph (l:ls)
           loop []                                 = [(Graph []) %= 1.0]

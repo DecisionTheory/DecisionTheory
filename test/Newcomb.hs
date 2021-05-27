@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings, DeriveDataTypeable, TypeApplications #-}
+{-# LANGUAGE OverloadedStrings, DeriveDataTypeable, TypeApplications, DataKinds #-}
 {-# OPTIONS_GHC -fno-warn-missing-signatures #-}
 {- HLINT ignore "Redundant do" -}
 
@@ -16,7 +16,7 @@ module Newcomb (tests) where
   import qualified DecisionTheory.TypedDecisionTheory as T
   import DecisionTheory.TypedGraph(distribution, choose, when, is, elsewise, (.*.), (.|.), (.&.))
 
-  untypedNewcomb :: UG.Graph UG.Stochastic
+  untypedNewcomb :: UG.Graph 'UG.Stochastic
   untypedNewcomb = UG.Graph [Labeled "Accuracy"       accuracy
                             ,Labeled "Predisposition" predisposition
                             ,Labeled "Action"         action

@@ -2,6 +2,7 @@
     ViewPatterns
   , GeneralizedNewtypeDeriving
   #-}
+{-# LANGUAGE DataKinds #-}
 module DecisionTheory.DecisionTheory
   ( Utility (..)
   , Search (..)
@@ -53,7 +54,7 @@ module DecisionTheory.DecisionTheory
   type Solution = Decision Utility
   type Solutions = [Solution]
 
-  unstableDT :: Foldable f => Hypothesis -> f Guard -> Search -> Graph Stochastic -> Solution
+  unstableDT :: Foldable f => Hypothesis -> f Guard -> Search -> Graph 'Stochastic -> Solution
   unstableDT hypothesis gs search@(Search uf a o) g = decision $ hypotheticals $ possibleActions
     where possibleActions = choices a $ branches g
           possibleBranches = foldl (flip condition) (branches g) gs
@@ -67,13 +68,13 @@ module DecisionTheory.DecisionTheory
   branchUtility :: Search -> Branch -> Utility
   branchUtility search = expectedValue . fmap (outcomeUtility search)
 
-  outcomeUtility :: Search -> Graph Deterministic -> Utility
+  outcomeUtility :: Search -> Graph 'Deterministic -> Utility
   outcomeUtility (Search uf _ o) = uf . M.fromJust . find o
 
   expectedValue :: Probability Utility -> Utility
   expectedValue (unProbability -> (a, p)) = a * fromRational p
 
-  dt :: Foldable f => Hypothesis -> f Guard -> Search -> Graph Stochastic -> Solutions
+  dt :: Foldable f => Hypothesis -> f Guard -> Search -> Graph 'Stochastic -> Solutions
   dt hypothesis gs s@(Search _ a _) g = let s = solve gs
                                          in reverse $ loop s []
     where loop :: Solution -> Solutions -> Solutions
@@ -84,13 +85,13 @@ module DecisionTheory.DecisionTheory
           solve :: Foldable f => f Guard -> Solution
           solve gs = unstableDT hypothesis gs s g
 
-  edt :: Foldable f => f Guard -> Search -> Graph Stochastic -> Solutions
+  edt :: Foldable f => f Guard -> Search -> Graph 'Stochastic -> Solutions
   edt = dt condition
 
-  cdt :: [Guard] -> Search -> Graph Stochastic -> Solutions
+  cdt :: [Guard] -> Search -> Graph 'Stochastic -> Solutions
   cdt = dt intervene
 
-  fdt :: Foldable f => Label -> f Guard -> Search -> Graph Stochastic -> Solutions
+  fdt :: Foldable f => Label -> f Guard -> Search -> Graph 'Stochastic -> Solutions
   fdt = dt . counterFactualize
 
   condition :: Hypothesis
@@ -99,7 +100,7 @@ module DecisionTheory.DecisionTheory
 
   intervene :: Hypothesis
   intervene (Guard l v) = normalize . map (mapBranches intervention)
-    where intervention :: Endo (Labeled (Node Deterministic))
+    where intervention :: Endo (Labeled (Node 'Deterministic))
           intervention ln@(Labeled l' _) | l == l'   = Labeled l (Always v)
                                          | otherwise = ln
 

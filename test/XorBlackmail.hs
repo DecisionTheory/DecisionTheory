@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings, DeriveDataTypeable, TypeApplications #-}
+{-# LANGUAGE OverloadedStrings, DeriveDataTypeable, TypeApplications, DataKinds #-}
 {-# OPTIONS_GHC -fno-warn-missing-signatures #-}
 {- HLINT ignore "Redundant do" -}
 
@@ -16,7 +16,7 @@ module XorBlackmail (tests) where
   import qualified DecisionTheory.TypedDecisionTheory as T
   import DecisionTheory.TypedGraph(distribution, choose, when, is, elsewise, (.*.), (.|.), (.&.))
 
-  untypedXorBlackmail :: UG.Graph UG.Stochastic
+  untypedXorBlackmail :: UG.Graph 'UG.Stochastic
   untypedXorBlackmail = UG.Graph [Labeled "Infestation"    infestation
                                  ,Labeled "Predisposition" predisposition
                                  ,Labeled "Prediction"     prediction

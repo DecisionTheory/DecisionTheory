@@ -1,10 +1,4 @@
-cabal-version: 1.12
-
--- This file has been generated from package.yaml by hpack version 0.31.2.
---
--- see: https://github.com/sol/hpack
---
--- hash: b8f21c0a6654662aee07178d153e3a1ebc3d58c4a298be721bdf60dc6191b837
+cabal-version: 3.0
 
 name:           DecisionTheory
 version:        0.1.0.0
@@ -33,6 +27,11 @@ library
       DecisionTheory.Probability
       DecisionTheory.TypedDecisionTheory
       DecisionTheory.TypedGraph
+      DecisionTheory.V2.HList
+      DecisionTheory.V2.TypedGraph
+      DecisionTheory.V2.TypeSet
+      DecisionTheory.V2.Stringify
+      DecisionTheory.V2.TypedDecisionTheory
   other-modules:
       Paths_DecisionTheory
   hs-source-dirs:
@@ -46,10 +45,14 @@ test-suite DecisionTheory-test
   main-is: Spec.hs
   other-modules:
       DeathInDamascus
+      V2.DeathInDamascus
       DecisionTheoryTests
       Newcomb
+      V2.Newcomb
       ParfitsHitchhiker
+      V2.ParfitsHitchhiker
       XorBlackmail
+      V2.XorBlackmail
       Paths_DecisionTheory
   hs-source-dirs:
       test
